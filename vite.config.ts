@@ -8,8 +8,16 @@ import { defineConfig } from 'vite'
  */
 const singleFile = process.env.SINGLE_FILE === '1'
 
+/**
+ * Assets are referenced relatively, so the same build works at a domain root
+ * (retirementplanner.example.com) or under a path (example.com/retirementplanner/)
+ * without rebuilding. BASE_PATH overrides it if an absolute path is ever needed.
+ */
+const base = process.env.BASE_PATH ?? './'
+
 // https://vite.dev/config/
 export default defineConfig({
+  base,
   plugins: [react(), tailwindcss()],
   build: {
     rolldownOptions: {

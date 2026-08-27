@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
+import { AssumptionBar } from './components/AssumptionBar'
 import { BalancesTable } from './components/BalancesTable'
 import { ContributionsChart } from './components/ContributionsChart'
 import { DrawdownOrder } from './components/DrawdownOrder'
@@ -9,11 +10,16 @@ import { NumberField } from './components/NumberField'
 import { OneOffEvents } from './components/OneOffEvents'
 import { PeopleEditor } from './components/PeopleEditor'
 import { PotsEditor } from './components/PotsEditor'
+import { PrintHeader } from './components/PrintHeader'
 import { RetirementAgeBar } from './components/RetirementAgeBar'
 import { SliderField } from './components/SliderField'
 import { SpendingSchedule } from './components/SpendingSchedule'
 import { SpendingSummary } from './components/SpendingSummary'
+import { MonteCarloChart } from './components/MonteCarloChart'
+import { SensitivityChart } from './components/SensitivityChart'
 import { SummaryCard } from './components/SummaryCard'
+import { TaxHeadroomChart } from './components/TaxHeadroomChart'
+import { TradeoffChart } from './components/TradeoffChart'
 import { WealthChart, type WealthChartMode } from './components/WealthChart'
 import { formatCurrency, formatMonthly } from './lib/format'
 import {
@@ -150,7 +156,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
-      <header className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+      <header className="no-print border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold">Retirement Planner</h1>
@@ -165,6 +171,14 @@ function App() {
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               {showInputs ? '◀ Hide inputs' : '▶ Show inputs'}
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              title="Opens your browser's print dialog — choose Save as PDF"
+            >
+              Export PDF
             </button>
             <button
               type="button"
@@ -232,7 +246,7 @@ function App() {
 
       <main className="mx-auto flex max-w-[1800px] flex-col gap-6 px-4 py-6 lg:flex-row">
         <aside
-          className={`w-full shrink-0 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 lg:w-96 ${
+          className={`no-print w-full shrink-0 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 lg:w-96 ${
             showInputs ? '' : 'hidden'
           }`}
         >
@@ -493,7 +507,15 @@ function App() {
         </aside>
 
         <section className="min-w-0 flex-1 space-y-6">
-          <RetirementAgeBar people={a.people} onChange={(people) => update('people', people)} />
+          <PrintHeader assumptions={a} />
+
+          <div className="no-print">
+            <RetirementAgeBar people={a.people} onChange={(people) => update('people', people)} />
+          </div>
+
+          <div className="no-print">
+            <AssumptionBar assumptions={a} onChange={replaceAll} />
+          </div>
 
           <div
             className={`space-y-6 transition-opacity duration-150 ${stale ? 'opacity-60' : ''}`}
@@ -584,6 +606,10 @@ function App() {
 
           <SpendingSummary assumptions={deferred} rows={rows} />
 
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <TradeoffChart assumptions={deferred} />
+          </div>
+
           {shortfall && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
               {shortfall.blockedByLock ? (
@@ -649,6 +675,25 @@ function App() {
               Mortgage ends {mortgagePaidOffYear}.
             </p>
             <IncomeChart assumptions={deferred} rows={rows} drawdownYear={drawdownRow?.year ?? null} />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h2 className="mb-1 text-sm font-semibold">Tax band headroom</h2>
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              Each person's taxable income against the bands. The gap to the {a.tax.higherRatePct}%
+              line is how much more could be drawn that year before the marginal rate jumps — the
+              room to shift drawdown between you, or between years.
+            </p>
+            <TaxHeadroomChart assumptions={a} rows={rows} />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <MonteCarloChart assumptions={deferred} />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <h2 className="mb-1 text-sm font-semibold">What the plan hangs on</h2>
+            <SensitivityChart assumptions={deferred} />
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">

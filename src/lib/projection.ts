@@ -164,7 +164,16 @@ function retirementAgeFor(person: Person, override?: RetirementOverride): number
  * as income; anything the household still needs is drawn from savings pots and
  * DC pensions that are unlocked at that point.
  */
-export function simulate(a: Assumptions, override?: RetirementOverride): YearRow[] {
+export function simulate(
+  a: Assumptions,
+  override?: RetirementOverride,
+  /**
+   * Optional per-year shock to every real investment return, in decimal (0.05
+   * = five points better than assumed). Used by the Monte Carlo run so the
+   * order of good and bad years matters, not just the average.
+   */
+  returnShocks?: number[],
+): YearRow[] {
   const rows: YearRow[] = []
   if (a.people.length === 0) return rows
 
@@ -240,7 +249,10 @@ export function simulate(a: Assumptions, override?: RetirementOverride): YearRow
       // Defined contribution: grow the pot and add contributions.
       let pensionContribution = 0
       if (person.pensionType === 'dc') {
-        const realGrowth = realRate(person.pensionGrowthRate, a.inflationRate)
+        const realGrowth = Math.max(
+          -1,
+          realRate(person.pensionGrowthRate, a.inflationRate) + (returnShocks?.[t] ?? 0),
+        )
         pensionContribution = retired ? 0 : annualPensionContribution(person, salary)
         pensionPots.set(
           person.id,
@@ -302,8 +314,10 @@ export function simulate(a: Assumptions, override?: RetirementOverride): YearRow
     })
     // Snapshot before growth so the table can reconcile:
     // start + interest + contributions - withdrawals = end.
+    const shock = returnShocks?.[t] ?? 0
     const potStartBalances = [...balances]
-    const potInterest = balances.map((b, i) => b * potGrowth[i])
+    // A pot can lose value in a bad year, but never goes negative from returns.
+    const potInterest = balances.map((b, i) => b * Math.max(-1, potGrowth[i] + shock))
     balances = balances.map((b, i) => b + potInterest[i] + potContributions[i])
 
     // One-off lump sums land after growth, so a windfall doesn't earn a full

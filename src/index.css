@@ -18,3 +18,65 @@ input[type="range"] {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/*
+ * Print / save-as-PDF.
+ *
+ * The browser's own print pipeline keeps charts as vectors, so no rendering
+ * library is needed. The work here is undoing the on-screen layout: panels that
+ * scroll internally have to spill their whole contents onto paper, and controls
+ * that do nothing on a page are dropped.
+ */
+@media print {
+  @page {
+    /* Landscape: the year-by-year tables are far wider than they are tall. */
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Interactive chrome has no meaning on paper. */
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Scrolling panels must print in full rather than at their clipped height. */
+  .max-h-96,
+  .max-h-80,
+  .overflow-auto,
+  .overflow-x-auto {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Keep a card and its chart on one sheet where it fits. */
+  main > section > div,
+  .print-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Sticky headers stack oddly across page breaks. */
+  thead,
+  th,
+  td {
+    position: static !important;
+  }
+
+  table {
+    font-size: 8.5px;
+  }
+
+  /* Charts keep their ink; everything else prints economically. */
+  .recharts-wrapper {
+    break-inside: avoid;
+  }
+}

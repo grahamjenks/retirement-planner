@@ -1,5 +1,5 @@
 import { formatCurrency } from '../lib/format'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { realRate, takeHomeEstimateFor } from '../lib/projection'
 import { dbSchemePresets, makeNuvosPartner } from '../lib/storage'
 import type { DbScheme, Person } from '../lib/types'
@@ -37,6 +37,7 @@ export function PeopleEditor({ people, inflationRate, tax, onChange }: PeopleEdi
           inflationRate={inflationRate}
           tax={tax}
           canRemove={people.length > 1 && i > 0}
+          defaultOpen={i === 0}
           onChange={(patch) => update(person.id, patch)}
           onRemove={() => remove(person.id)}
         />
@@ -60,6 +61,7 @@ interface PersonCardProps {
   inflationRate: number
   tax: TaxSettings
   canRemove: boolean
+  defaultOpen: boolean
   onChange: (patch: Partial<Person>) => void
   onRemove: () => void
 }
@@ -69,11 +71,27 @@ function PersonCard({
   inflationRate,
   tax,
   canRemove,
+  defaultOpen,
   onChange,
   onRemove,
 }: PersonCardProps) {
   const isDb = person.pensionType === 'db'
   const estimate = takeHomeEstimateFor(person, tax)
+  const [open, setOpen] = useState(defaultOpen)
+  const [pensionOpen, setPensionOpen] = useState(false)
+
+  // A closed section still has to say what is inside it, or collapsing just
+  // hides the numbers you came to check.
+  const personSummary = `${person.currentAge} now · retires ${person.retirementAge} · ${formatCurrency(person.currentAnnualIncome)}`
+  const pensionSummary = isDb
+    ? person.dbSchemes.length === 0
+      ? 'No schemes added'
+      : `${person.dbSchemes.map((sc) => sc.name).join(' + ')} · ${formatCurrency(
+          person.dbSchemes.reduce((sum, sc) => sum + sc.accruedAnnualPension, 0),
+        )}/yr so far`
+    : `${formatCurrency(person.currentPensionPot)} pot · ${
+        person.employeePensionPct + person.employerPensionPct
+      }% of salary`
 
   function updateScheme(id: string, patch: Partial<DbScheme>) {
     onChange({
@@ -83,7 +101,18 @@ function PersonCard({
 
   return (
     <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${person.name}`}
+          className={`shrink-0 rounded px-1 text-slate-400 transition-transform hover:text-slate-700 dark:hover:text-slate-200 ${
+            open ? 'rotate-180' : ''
+          }`}
+        >
+          ▾
+        </button>
         <input
           type="text"
           value={person.name}
@@ -110,7 +139,19 @@ function PersonCard({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-1 block w-full truncate text-left text-[11px] text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+        >
+          {personSummary} · {pensionSummary}
+        </button>
+      )}
+
+      {open && (
+      <>
+      <div className="mt-3 grid grid-cols-2 gap-3">
         <NumberField
           label="Current age"
           value={person.currentAge}
@@ -195,7 +236,13 @@ function PersonCard({
         />
       </div>
 
-      <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-600">
+      <Disclosure
+        title="Pension"
+        summary={pensionSummary}
+        open={pensionOpen}
+        onToggle={() => setPensionOpen((v) => !v)}
+      >
+      <div>
         <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Pension type</span>
         <div className="mt-1.5 flex overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600">
           {(
@@ -302,6 +349,8 @@ function PersonCard({
         </div>
       )}
 
+      </Disclosure>
+
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 dark:border-slate-600">
         <NumberField
           label="State pension age"
@@ -318,6 +367,8 @@ function PersonCard({
           step={100}
         />
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -476,6 +527,46 @@ function AddSchemeButton({ onAdd }: { onAdd: (scheme: DbScheme) => void }) {
       >
         Cancel
       </button>
+    </div>
+  )
+}
+
+interface DisclosureProps {
+  title: string
+  summary?: string
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}
+
+/**
+ * A labelled expand/collapse. Each person's card carries a lot of fields, and
+ * with two people the sidebar became unscrollable — so everything but the
+ * headline collapses, with a summary line so a closed section still says what
+ * is inside it.
+ */
+function Disclosure({ title, summary, open, onToggle, children }: DisclosureProps) {
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-600">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            {title}
+          </span>
+          {!open && summary && (
+            <span className="block truncate text-[11px] text-slate-400">{summary}</span>
+          )}
+        </span>
+        <span className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}>
+          ▾
+        </span>
+      </button>
+      {open && <div className="space-y-3 px-2.5 pb-3">{children}</div>}
     </div>
   )
 }
