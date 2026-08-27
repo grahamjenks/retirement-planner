@@ -1,9 +1,9 @@
 # Deploy config for retirementplanner.grahamjenkinson.com
 #
-# Works as-is on Netlify. Cloudflare Pages needs the same three values entered
-# in its UI: build command, output directory, and root directory.
+# Works as-is on Netlify. Cloudflare Pages needs the same two values entered
+# in its UI: build command and output directory. The project sits at the repo
+# root, so neither host needs a base/root directory set.
 [build]
-  base    = "retirement-planner"
   command = "npm ci && npm run build"
   publish = "dist"
 
