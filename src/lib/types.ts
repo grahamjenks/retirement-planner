@@ -224,6 +224,13 @@ export interface YearRow {
 
   mortgagePayment: number
   mortgageActive: boolean
+  /**
+   * Paid into savings pots this year. Money moved into a pot has left the
+   * spendable budget, so it is part of `outgoings` rather than a separate
+   * total. Pension contributions are not included: they come out before
+   * take-home pay, so they never reach the budget in the first place.
+   */
+  potContributionsTotal: number
   outgoings: number
   /** True once every person has passed their retirement age. */
   householdRetired: boolean

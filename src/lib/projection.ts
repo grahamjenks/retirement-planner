@@ -338,7 +338,12 @@ export function simulate(
     // Salaries are entered as take-home, so only pension income is taxed here.
     // ISA and savings withdrawals are returns of capital and stay untaxed.
     const spending = householdRetired ? spendingAtAge(a, anchorAge) : workingCostsAnnual(a)
-    const outgoings = spending + mortgagePayment
+    // Paying into a savings pot is a call on income exactly like spending it:
+    // the money is no longer available to live on. Leaving it out let the plan
+    // fund its own saving out of nothing. Pension contributions are already
+    // deducted before take-home pay, so only pot contributions are added here.
+    const potContributionsTotal = potContributions.reduce((s, c) => s + c, 0)
+    const outgoings = spending + mortgagePayment + potContributionsTotal
     const guaranteedIncome = salaryTotal + statePensionTotal + dbIncomeTotal
 
     // Running taxable total per person, so each further withdrawal is charged
@@ -484,6 +489,24 @@ export function simulate(
 
     balances = balances.map((b) => Math.max(0, b))
 
+    // A pot that funds its own contribution is churn, not activity: paying
+    // £30k in and taking £28k straight back out to afford it is really a £2k
+    // contribution. Cancelling the two off leaves every balance untouched —
+    // both sides move by the same amount — but stops the charts reporting a
+    // drawdown that never happened. Contributions funded from a *different*
+    // pot are real transfers and survive this.
+    let contributionChurn = 0
+    potContributions.forEach((c, i) => {
+      const offset = Math.min(c, potTaken[i])
+      if (offset <= 0) return
+      potContributions[i] -= offset
+      potTaken[i] -= offset
+      contributionChurn += offset
+    })
+    const reportedContributions = potContributionsTotal - contributionChurn
+    const reportedWithdrawal = withdrawal - contributionChurn
+    const reportedOutgoings = outgoings - contributionChurn
+
     // Fold the final pot/pension state back into this year's person records.
     for (const py of peopleYears) {
       py.pensionPot = Math.max(0, pensionPots.get(py.id) ?? 0)
@@ -523,12 +546,13 @@ export function simulate(
       dbIncomeTotal,
       guaranteedIncome,
       taxPaid: taxTotal,
-      netIncome: guaranteedIncome + withdrawal - taxTotal,
+      netIncome: guaranteedIncome + reportedWithdrawal - taxTotal,
       mortgagePayment,
       mortgageActive,
-      outgoings,
+      potContributionsTotal: reportedContributions,
+      outgoings: reportedOutgoings,
       householdRetired,
-      withdrawal,
+      withdrawal: reportedWithdrawal,
       shortfall,
       depleted: shortfall > 0.01,
       blockedByLock,

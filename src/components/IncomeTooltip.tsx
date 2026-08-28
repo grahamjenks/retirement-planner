@@ -178,6 +178,16 @@ export function IncomeTooltip({ active, label, assumptions: a, rows }: IncomeToo
               −{formatCurrency(row.outgoings)}
             </td>
           </tr>
+          {row.potContributionsTotal > 0.5 && (
+            <tr>
+              <td className="pr-3 pl-3 text-[11px] text-slate-400 dark:text-slate-500">
+                of which into savings
+              </td>
+              <td className="text-right text-[11px] tabular-nums text-slate-400 dark:text-slate-500">
+                {formatCurrency(row.potContributionsTotal)}
+              </td>
+            </tr>
+          )}
           <tr>
             <td className="pr-3 font-semibold text-slate-700 dark:text-slate-200">
               {leftOver < -0.5 ? 'Short by' : 'Left over'}

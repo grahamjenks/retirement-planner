@@ -91,8 +91,9 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
         Take-home pay plus pensions each year, against what's going out. Switch to{' '}
         <strong>Every source</strong> to split it by person and pot. Pension contributions are
-        already deducted from take-home, so only savings come out of "Left over". Click{' '}
-        <strong>Into savings</strong> to see where it goes.
+        already deducted from take-home; money paid into savings is counted in{' '}
+        <strong>Outgoings</strong>, so <strong>Left over</strong> is what remains after both
+        spending and saving. Click <strong>Into savings</strong> to see where it goes.
       </p>
 
       <div className="max-h-96 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
@@ -185,9 +186,8 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
               const potContributions = row.potContributions.reduce((s, c) => s + c, 0)
               const contributions = pensionContributions + potContributions
               const totalIncome = row.guaranteedIncome + row.withdrawal
-              // Pension contributions come out before take-home, so only pot
-              // contributions are a further call on spendable income.
-              const leftOver = row.netIncome - row.outgoings - potContributions
+              // Pot contributions are already inside row.outgoings.
+              const leftOver = row.netIncome - row.outgoings
               const highlight = a.people.some((p) => p.currentAge + row.t === p.retirementAge)
               const rowBg = highlight ? 'bg-blue-50 dark:bg-blue-950/40' : ''
               const note = eventNoteFor(a, row)

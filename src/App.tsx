@@ -593,8 +593,23 @@ function App() {
                 finalRow
                   ? `At ${finalRow.year} (${finalRow.people
                       .map((p) => `${p.name} ${p.age}`)
-                      .join(', ')}) · savings ${formatCurrency(finalRow.potsTotal)}`
+                      .join(', ')})`
                   : undefined
+              }
+            />
+            <SummaryCard
+              label="Savings remaining"
+              value={formatCurrency(finalRow?.potsTotal ?? 0)}
+              tone={(finalRow?.potsTotal ?? 0) > 0 ? 'good' : 'warn'}
+              sub={
+                finalRow && deferred.pots.length > 0
+                  ? deferred.pots
+                      .map(
+                        (pot, i) =>
+                          `${pot.name} ${formatCurrency(finalRow.potBalances[i] ?? 0)}`,
+                      )
+                      .join(' · ')
+                  : 'No savings pots'
               }
             />
             <SummaryCard
