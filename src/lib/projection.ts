@@ -196,6 +196,11 @@ export function simulate(
   const pensionPots = new Map(
     a.people.map((p) => [p.id, p.pensionType === 'dc' ? Math.max(0, p.currentPensionPot) : 0]),
   )
+  // Every person has a pensionPots entry, including salary-based ones whose
+  // pot is a standing 0 — so membership here, not the map, says who has a pot.
+  const dcPersonIds = new Set(
+    a.people.filter((p) => p.pensionType === 'dc').map((p) => p.id),
+  )
   // Accrued annual pension per scheme, keyed "<personId>:<schemeId>".
   const dbAccrued = new Map<string, number>()
   a.people.forEach((p) => {
@@ -327,7 +332,20 @@ export function simulate(
     const potOneOffs = new Array<number>(balances.length).fill(0)
     for (const event of a.oneOffEvents) {
       if (event.atAge !== anchorAge) continue
-      const i = potIndexById.get(event.potId)
+
+      // A pension destination lands in that person's DC pot, which is locked
+      // until their access age like the rest of it. Salary-based schemes hold
+      // no pot, so there is nowhere for the money to go.
+      const pensionPersonId = personIdFromSource(event.targetId)
+      if (pensionPersonId !== null) {
+        if (!dcPersonIds.has(pensionPersonId)) continue
+        const current = pensionPots.get(pensionPersonId) ?? 0
+        const applied = event.amount < 0 ? -Math.min(current, -event.amount) : event.amount
+        pensionPots.set(pensionPersonId, current + applied)
+        continue
+      }
+
+      const i = potIndexById.get(event.targetId)
       if (i === undefined) continue
       const applied = event.amount < 0 ? -Math.min(balances[i], -event.amount) : event.amount
       potOneOffs[i] += applied

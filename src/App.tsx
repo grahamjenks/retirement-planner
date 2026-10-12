@@ -368,6 +368,7 @@ function App() {
             <OneOffEvents
               events={a.oneOffEvents}
               pots={a.pots}
+              people={a.people}
               primaryName={primary.name}
               currentAge={primary.currentAge}
               retirementAge={primary.retirementAge}

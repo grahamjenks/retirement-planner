@@ -1,11 +1,13 @@
 import { formatCurrency } from '../lib/format'
 import { newId } from '../lib/storage'
-import type { OneOffEvent, SavingsPot } from '../lib/types'
+import { pensionSourceId } from '../lib/types'
+import type { OneOffEvent, Person, SavingsPot } from '../lib/types'
 import { NumberField } from './NumberField'
 
 interface OneOffEventsProps {
   events: OneOffEvent[]
   pots: SavingsPot[]
+  people: Person[]
   primaryName: string
   currentAge: number
   retirementAge: number
@@ -15,12 +17,26 @@ interface OneOffEventsProps {
 export function OneOffEvents({
   events,
   pots,
+  people,
   primaryName,
   currentAge,
   retirementAge,
   onChange,
 }: OneOffEventsProps) {
   const sorted = [...events].sort((a, b) => a.atAge - b.atAge)
+
+  // A lump sum can land in a savings pot or in someone's DC pension. A
+  // salary-based scheme holds no pot, so it is not a destination.
+  const destinations = [
+    ...pots.map((pot) => ({ id: pot.id, label: pot.name, pension: false })),
+    ...people
+      .filter((person) => person.pensionType === 'dc')
+      .map((person) => ({
+        id: pensionSourceId(person.id),
+        label: people.length > 1 ? `${person.name}: pension` : 'Pension',
+        pension: true,
+      })),
+  ]
 
   function update(id: string, patch: Partial<OneOffEvent>) {
     onChange(events.map((e) => (e.id === id ? { ...e, ...patch } : e)))
@@ -35,14 +51,14 @@ export function OneOffEvents({
     const nextAge = last ? last.atAge + 5 : retirementAge
     onChange([
       ...events,
-      { id: newId(), name: 'Inheritance', atAge: nextAge, amount: 50000, potId: pots[0].id },
+      { id: newId(), name: 'Inheritance', atAge: nextAge, amount: 50000, targetId: destinations[0].id },
     ])
   }
 
-  if (pots.length === 0) {
+  if (destinations.length === 0) {
     return (
       <p className="text-xs text-amber-600 dark:text-amber-400">
-        Add a savings pot first — a lump sum needs somewhere to land.
+        Add a savings pot or a pot-based pension first — a lump sum needs somewhere to land.
       </p>
     )
   }
@@ -121,13 +137,13 @@ export function OneOffEvents({
                     {incoming ? 'Goes into' : 'Comes out of'}
                   </span>
                   <select
-                    value={event.potId}
-                    onChange={(e) => update(event.id, { potId: e.target.value })}
+                    value={event.targetId}
+                    onChange={(e) => update(event.id, { targetId: e.target.value })}
                     className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
                   >
-                    {pots.map((pot) => (
-                      <option key={pot.id} value={pot.id}>
-                        {pot.name}
+                    {destinations.map((destination) => (
+                      <option key={destination.id} value={destination.id}>
+                        {destination.label}
                       </option>
                     ))}
                   </select>

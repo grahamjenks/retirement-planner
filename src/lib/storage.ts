@@ -303,14 +303,18 @@ function coerceBand(raw: unknown, index: number): SpendingBand {
   }
 }
 
-function coerceOneOff(raw: unknown, index: number, potFallback: string): OneOffEvent {
-  const e = (raw ?? {}) as Partial<OneOffEvent>
+function coerceOneOff(raw: unknown, index: number, targetFallback: string): OneOffEvent {
+  // Records written before pensions could receive a lump sum name the
+  // destination `potId`; it only ever held a savings pot id, so it carries
+  // straight over.
+  const e = (raw ?? {}) as Partial<OneOffEvent> & { potId?: unknown }
+  const target = [e.targetId, e.potId].find((v): v is string => typeof v === 'string' && v !== '')
   return {
     id: typeof e.id === 'string' && e.id ? e.id : `oneoff-${index}-${newId()}`,
     name: typeof e.name === 'string' && e.name ? e.name : 'Inheritance',
     atAge: num(e.atAge, 60),
     amount: num(e.amount, 0),
-    potId: typeof e.potId === 'string' && e.potId ? e.potId : potFallback,
+    targetId: target ?? targetFallback,
   }
 }
 
@@ -378,7 +382,12 @@ export function coerceAssumptions(raw: unknown): Assumptions {
   pots.forEach((pot) => {
     if (!validOwners.has(pot.ownerId)) pot.ownerId = ownerFallback
   })
-  const validPots = new Set(pots.map((p) => p.id))
+  // Somewhere a one-off lump sum can land: any savings pot, or a DC pension.
+  const oneOffTargets = [
+    ...pots.map((p) => p.id),
+    ...people.filter((p) => p.pensionType === 'dc').map((p) => pensionSourceId(p.id)),
+  ]
+  const validOneOffTargets = new Set(oneOffTargets)
 
   // Records saved before costs were split carry a single annual figure.
   const working = splitCosts(
@@ -417,13 +426,16 @@ export function coerceAssumptions(raw: unknown): Assumptions {
     spendingChanges: Array.isArray(parsed.spendingChanges)
       ? parsed.spendingChanges.map(coerceBand)
       : [],
-    // An event whose pot was deleted falls back to the first pot; with no
-    // pots at all there is nowhere for the money to land, so it is dropped.
+    // An event whose destination was deleted — a pot removed, or someone
+    // switched to a salary-based pension — falls back to the first one left.
+    // With nowhere at all for the money to land it is dropped.
     oneOffEvents:
-      Array.isArray(parsed.oneOffEvents) && pots.length > 0
+      Array.isArray(parsed.oneOffEvents) && oneOffTargets.length > 0
         ? parsed.oneOffEvents
-            .map((e, i) => coerceOneOff(e, i, pots[0].id))
-            .map((e) => (validPots.has(e.potId) ? e : { ...e, potId: pots[0].id }))
+            .map((e, i) => coerceOneOff(e, i, oneOffTargets[0]))
+            .map((e) =>
+              validOneOffTargets.has(e.targetId) ? e : { ...e, targetId: oneOffTargets[0] },
+            )
         : [],
     mortgageAnnualPayment: num(parsed.mortgageAnnualPayment, fallback.mortgageAnnualPayment),
     mortgageYearsRemaining: num(parsed.mortgageYearsRemaining, fallback.mortgageYearsRemaining),
