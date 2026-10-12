@@ -33,6 +33,13 @@ npm run dev
   Age rules follow whichever person owns the pot.
 - **Spending is shared**, switching from working-age living costs to retirement
   spending once everyone has retired, with optional step-changes at set ages.
+- **One-off events** are lump sums that happen in a single year — an inheritance
+  arriving, a gift given away, or a payment into a pension. Each one names an
+  age, an amount and where it lands: a savings pot, or someone's DC pension,
+  where it is locked until their access age like the rest of the pot. The money
+  comes from outside the plan rather than from income or another pot, and the
+  amount you enter is the amount that lands. Money out never takes a pot below
+  zero.
 - Each year, salaries, state pensions and DB pensions are counted first; any
   gap is drawn from unlocked pots and DC pensions — either spread across them
   proportionally, or in an order you choose.
@@ -50,6 +57,10 @@ income tax and National Insurance — the sidebar shows the working. Enter the
 number from your payslip to override it.
 
 ## Not modelled
+
+Tax relief and the annual allowance on money paid into a pension: a one-off
+payment lands at face value, so enter the gross figure if you want relief
+counted, and check the £60,000 allowance yourself.
 
 Survivor benefits, and any change in spending after a first death. Life
 expectancy differs per person, but spending continues at the full rate for the

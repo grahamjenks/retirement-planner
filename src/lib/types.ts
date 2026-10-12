@@ -96,9 +96,14 @@ export function personIdFromSource(sourceId: string): string | null {
 }
 
 /**
- * A one-off lump sum moving in or out of a savings pot at a set age — an
- * inheritance or a windfall coming in, a gift or a big one-time cost going
- * out. Unlike a spending change it happens once, in a single year.
+ * A one-off lump sum moving in or out of a savings pot or a DC pension at a
+ * set age — an inheritance or a windfall coming in, a gift or a big one-time
+ * cost going out, or a lump sum paid into a pension. Unlike a spending change
+ * it happens once, in a single year.
+ *
+ * The money comes from outside the plan: it is not taken from income or from
+ * another pot, so paying into a pension here is new money arriving, not a
+ * transfer. The amount is what lands — no tax relief is added.
  */
 export interface OneOffEvent {
   id: string
@@ -107,8 +112,11 @@ export interface OneOffEvent {
   atAge: number
   /** Positive money in, negative money out. */
   amount: number
-  /** The pot it lands in, or is taken from. */
-  potId: string
+  /**
+   * Where it lands, or is taken from: a savings pot id, or `pension:<personId>`
+   * for someone's DC pension — the same source ids `drawdownOrder` uses.
+   */
+  targetId: string
 }
 
 /**
