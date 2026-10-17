@@ -589,6 +589,58 @@ export interface RetirementSearchResult {
  * Earliest retirement age for one person — everyone else keeps their own
  * planned retirement age — at which the household never falls short.
  */
+export interface MaxIncomeResult {
+  /** The highest flat yearly retirement spend the plan still sustains. */
+  annual: number
+  /** True when even spending nothing still falls short, so spending is not the lever. */
+  impossible: boolean
+}
+
+/** The same plan with retirement spending held flat at a given yearly figure. */
+function withFlatRetirementSpend(a: Assumptions, annual: number): Assumptions {
+  return {
+    ...a,
+    retirementMonthly: annual / 12,
+    retirementAnnualExtras: 0,
+    // A flat ceiling: later step-changes would override the figure being tested.
+    spendingChanges: [],
+  }
+}
+
+/**
+ * The most that can be spent every year of retirement with the plan still
+ * holding to the end — pots and pensions run down to nothing, but never run
+ * out early. A year that falls short is the failure, and emptying the last
+ * pot in the final year is not one, so this is the level that uses everything.
+ *
+ * Spending is flat while searching, so the answer is a ceiling on a level
+ * income rather than a reshaping of a plan that steps up or down with age.
+ * More spending can only ever make a plan fail sooner, so the test is
+ * monotonic and a bisection finds the edge.
+ */
+export function maxRetirementIncome(a: Assumptions): MaxIncomeResult {
+  const run = (annual: number) => simulate(withFlatRetirementSpend(a, annual))
+  const survives = (rows: YearRow[]) => !rows.some((r) => r.depleted)
+
+  if (!survives(run(0))) return { annual: 0, impossible: true }
+
+  // Climb until it breaks, so the bracket fits any size of pot.
+  let low = 0
+  let high = Math.max(10000, retirementBaselineAnnual(a))
+  while (high < 1e9 && survives(run(high))) {
+    low = high
+    high *= 2
+  }
+
+  // 30 halvings take any bracket below a penny.
+  for (let i = 0; i < 30; i++) {
+    const mid = (low + high) / 2
+    if (survives(run(mid))) low = mid
+    else high = mid
+  }
+  return { annual: low, impossible: false }
+}
+
 export function findEarliestRetirementAge(
   a: Assumptions,
   personId: string,
