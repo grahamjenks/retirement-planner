@@ -25,6 +25,7 @@ import { formatCurrency, formatMonthly } from './lib/format'
 import {
   drawdownStartRow,
   findEarliestRetirementAge,
+  maxRetirementIncome,
   firstShortfallRow,
   potsExhaustedRow,
   realRate,
@@ -103,6 +104,9 @@ function App() {
   const worstShortfall = useMemo(() => worstShortfallRow(rows), [rows])
   const shortfallTotals = useMemo(() => shortfallSummary(deferred, rows), [deferred, rows])
   const unlocks = useMemo(() => unlockEvents(deferred), [deferred])
+  const maxIncome = useMemo(() => maxRetirementIncome(deferred), [deferred])
+  // What the plan actually spends in retirement, to compare the ceiling against.
+  const plannedRetirementSpend = retirementBaselineAnnual(deferred)
   const primary = a.people[0]
   // Each person's earliest retirement is searched with everyone else's plan
   // held fixed, so the ages are not necessarily achievable all at once.
@@ -617,6 +621,22 @@ function App() {
               label="Guaranteed income for life"
               value={formatCurrency(guaranteedInRetirement)}
               sub="State + salary-based pensions"
+            />
+            <SummaryCard
+              label="Most you could spend"
+              value={maxIncome.impossible ? 'Nothing works' : formatCurrency(maxIncome.annual)}
+              tone={
+                maxIncome.impossible
+                  ? 'bad'
+                  : maxIncome.annual >= plannedRetirementSpend
+                    ? 'good'
+                    : 'warn'
+              }
+              sub={
+                maxIncome.impossible
+                  ? 'Short even spending nothing — the gap is income, not spending.'
+                  : `A year, flat, emptying everything by the end · ${formatMonthly(maxIncome.annual)} a month. You plan ${formatCurrency(plannedRetirementSpend)}${maxIncome.annual >= plannedRetirementSpend ? ` — ${formatCurrency(maxIncome.annual - plannedRetirementSpend)} of room` : ` — ${formatCurrency(plannedRetirementSpend - maxIncome.annual)} too much`}.`
+              }
             />
           </div>
 

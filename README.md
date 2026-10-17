@@ -40,6 +40,12 @@ npm run dev
   comes from outside the plan rather than from income or another pot, and the
   amount you enter is the amount that lands. Money out never takes a pot below
   zero.
+- **Most you could spend** is the ceiling on retirement living costs: the
+  highest flat yearly figure the plan still meets every year to the end, with
+  pots and pensions run down to nothing rather than left over. It is found by
+  searching for the level at which the plan just stops falling short. Being a
+  flat ceiling it ignores any spending step-changes, and like the retirement
+  figure it sits alongside the mortgage rather than including it.
 - Each year, salaries, state pensions and DB pensions are counted first; any
   gap is drawn from unlocked pots and DC pensions — either spread across them
   proportionally, or in an order you choose.
