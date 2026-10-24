@@ -59,7 +59,7 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
                 onClick={() => setDetailed(d)}
                 className={`px-2.5 py-1 text-xs font-medium ${
                   detailed === d
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-ink-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
               >
@@ -149,7 +149,7 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
                   type="button"
                   onClick={() => setShowDestinations((v) => !v)}
                   aria-expanded={showDestinations}
-                  className="inline-flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400"
+                  className="inline-flex items-center gap-1 hover:text-ink-600 dark:hover:text-ink-400"
                 >
                   Into savings
                   <span className="text-slate-400">{showDestinations ? '▾' : '▸'}</span>
@@ -189,14 +189,14 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
               // Pot contributions are already inside row.outgoings.
               const leftOver = row.netIncome - row.outgoings
               const highlight = a.people.some((p) => p.currentAge + row.t === p.retirementAge)
-              const rowBg = highlight ? 'bg-blue-50 dark:bg-blue-950/40' : ''
+              const rowBg = highlight ? 'bg-ink-50 dark:bg-ink-950/40' : ''
               const note = eventNoteFor(a, row)
 
               return (
                 <tr key={row.t} className={`border-t border-slate-100 dark:border-slate-700 ${rowBg}`}>
                   <td
                     className={`sticky left-0 z-10 px-3 py-1.5 font-medium tabular-nums ${
-                      highlight ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-white dark:bg-slate-800'
+                      highlight ? 'bg-ink-50 dark:bg-ink-950/40' : 'bg-white dark:bg-slate-800'
                     }`}
                   >
                     {row.year}

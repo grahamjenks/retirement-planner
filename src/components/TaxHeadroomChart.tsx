@@ -68,13 +68,13 @@ function TaxHeadroomChartBase({ assumptions: a, rows }: TaxHeadroomChartProps) {
           <XAxis
             dataKey="year"
             tick={<YearAgeTick agesByYear={tickAges} />}
-            height={42}
+            height={58}
             interval="preserveStartEnd"
             minTickGap={24}
             label={{
               value: yearAxisLabel(rows),
               position: 'insideBottom',
-              offset: -14,
+              offset: 2,
               fontSize: 11,
             }}
           />

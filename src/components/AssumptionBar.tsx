@@ -29,7 +29,7 @@ function RateSlider({ label, color, value, realPct, onChange, max = 12 }: RateSl
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
           <span className="truncate text-xs text-slate-600 dark:text-slate-300">{label}</span>
         </span>
-        <span className="shrink-0 text-xs font-semibold text-blue-600 tabular-nums dark:text-blue-400">
+        <span className="shrink-0 text-xs font-semibold text-ink-600 tabular-nums dark:text-ink-400">
           {value}%
         </span>
       </span>
@@ -53,7 +53,7 @@ export function AssumptionBar({ assumptions: a, onChange }: AssumptionBarProps) 
   const dcPeople = a.people.filter((p) => p.pensionType === 'dc')
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <p className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
         Growth &amp; inflation
         <span className="ml-2 font-normal text-slate-400">

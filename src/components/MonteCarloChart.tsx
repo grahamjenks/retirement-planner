@@ -82,7 +82,7 @@ function MonteCarloChartBase({ assumptions: a }: MonteCarloChartProps) {
               onChange={(e) => setVolatility(e.target.valueAsNumber)}
               className="w-24"
             />
-            <span className="w-8 font-semibold text-blue-600 tabular-nums dark:text-blue-400">
+            <span className="w-8 font-semibold text-ink-600 tabular-nums dark:text-ink-400">
               {volatility}%
             </span>
           </label>
@@ -130,13 +130,13 @@ function MonteCarloChartBase({ assumptions: a }: MonteCarloChartProps) {
             <XAxis
               dataKey="year"
               tick={<YearAgeTick agesByYear={tickAges} />}
-              height={42}
+              height={58}
               interval="preserveStartEnd"
               minTickGap={24}
               label={{
                 value: yearAxisLabel(baseline),
                 position: 'insideBottom',
-                offset: -14,
+                offset: 2,
                 fontSize: 11,
               }}
             />

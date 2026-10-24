@@ -58,7 +58,7 @@ export function NumberField({
     <label className="block">
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <div
-        className={`mt-1 flex items-center rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-blue-500 dark:border-slate-600 ${
+        className={`mt-1 flex items-center rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-ink-500 dark:border-slate-600 ${
           disabled ? 'bg-slate-100 dark:bg-slate-900' : 'bg-white dark:bg-slate-800'
         }`}
       >

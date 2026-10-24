@@ -29,7 +29,7 @@ export function SegmentedToggle<T extends string | boolean>({
           title={title}
           className={`px-2.5 py-1 text-xs font-medium ${
             value === optionValue
-              ? 'bg-blue-600 text-white'
+              ? 'bg-ink-600 text-white'
               : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
           }`}
         >

@@ -75,7 +75,7 @@ export function SpendingSummary({ assumptions: a, rows }: SpendingSummaryProps) 
   const per = monthly ? 'a month' : 'a year'
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Spending assumptions</h2>
         <div className="flex shrink-0 overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600">
@@ -86,7 +86,7 @@ export function SpendingSummary({ assumptions: a, rows }: SpendingSummaryProps) 
               onClick={() => setMonthly(m)}
               className={`px-2.5 py-1 text-xs font-medium ${
                 monthly === m
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-ink-600 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
@@ -135,7 +135,7 @@ export function SpendingSummary({ assumptions: a, rows }: SpendingSummaryProps) 
                     <span
                       className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                         ps.retired
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                          ? 'bg-ink-100 text-ink-700 dark:bg-ink-950 dark:text-ink-300'
                           : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
                       }`}
                     >

@@ -25,7 +25,7 @@ export function RetirementAgeBar({ people, onChange }: RetirementAgeBarProps) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <span className="text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
           Retire at

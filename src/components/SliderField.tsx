@@ -23,7 +23,7 @@ export function SliderField({
     <label className="block">
       <div className="flex items-baseline justify-between">
         <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
-        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+        <span className="text-sm font-semibold text-ink-600 dark:text-ink-400">
           {value}
           {suffix}
         </span>
