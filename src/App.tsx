@@ -1,17 +1,21 @@
-import { useDeferredValue, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AssumptionBar } from './components/AssumptionBar'
 import { BalancesTable } from './components/BalancesTable'
 import { ContributionsChart } from './components/ContributionsChart'
 import { DrawdownOrder } from './components/DrawdownOrder'
+import { HeroStat } from './components/HeroStat'
 import { IncomeChart } from './components/IncomeChart'
 import { IncomeTable } from './components/IncomeTable'
 import { InputSection } from './components/InputSection'
 import { NumberField } from './components/NumberField'
 import { OneOffEvents } from './components/OneOffEvents'
+import { Panel } from './components/Panel'
 import { PeopleEditor } from './components/PeopleEditor'
 import { PotsEditor } from './components/PotsEditor'
 import { PrintHeader } from './components/PrintHeader'
+import { ResultTabs } from './components/ResultTabs'
 import { RetirementAgeBar } from './components/RetirementAgeBar'
+import { SegmentedToggle } from './components/SegmentedToggle'
 import { SliderField } from './components/SliderField'
 import { SpendingSchedule } from './components/SpendingSchedule'
 import { SpendingSummary } from './components/SpendingSummary'
@@ -65,13 +69,28 @@ function useAssumptions() {
   return { assumptions, update, replaceAll }
 }
 
+const verdictPill = {
+  good: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-900',
+  warn: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-900',
+  bad: 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:ring-rose-900',
+}
+
+/** Tab id, label, and how many panels it holds. */
+const RESULT_TABS = [
+  ['overview', 'Overview', 4],
+  ['risk', 'Risk & trade-offs', 4],
+  ['years', 'Year by year', 2],
+] as const
+
+type TabId = (typeof RESULT_TABS)[number][0]
+
 function StrategyBadge({ strategy }: { strategy: Assumptions['drawdownStrategy'] }) {
   const priority = strategy === 'priority'
   return (
     <span
       className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
         priority
-          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+          ? 'bg-ink-100 text-ink-700 dark:bg-ink-950 dark:text-ink-300'
           : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
       }`}
       title="Set this under 'Drawdown order' in the sidebar"
@@ -87,6 +106,9 @@ function App() {
   const [undoReset, setUndoReset] = useState<Assumptions | null>(null)
   const [chartMode, setChartMode] = useState<WealthChartMode>('stacked')
   const [showInputs, setShowInputs] = useState(true)
+  const [tab, setTab] = useState<TabId>('overview')
+  // Set only for the moment it takes to print; see handlePrint.
+  const [printAll, setPrintAll] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Every derived figure below is expensive: a full projection, plus a
@@ -131,6 +153,162 @@ function App() {
     return last ? last.statePensionTotal + last.dbIncomeTotal : 0
   }, [rows])
 
+
+  /*
+   * The hero holds one stat per person plus two household ones, so its column
+   * count has to follow the household rather than being fixed — three across
+   * for one person, four for two.
+   */
+  const heroGrid =
+    earliestByPerson.length + 2 >= 4 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'
+
+  // One line in words, so the hero figures arrive with a frame around them.
+  const verdict = shortfall
+    ? ({
+        tone: 'bad',
+        headline: 'Short of the plan',
+        detail: `First shortfall ${shortfall.year} — ${formatCurrency(shortfallTotals.total)} missing across ${shortfallTotals.yearsShort} ${shortfallTotals.yearsShort === 1 ? 'year' : 'years'}.`,
+      } as const)
+    : exhausted
+      ? ({
+          tone: 'warn',
+          headline: 'Funded, with nothing spare',
+          detail: `Income needs are met every year, but the pots are empty by ${exhausted.year}.`,
+        } as const)
+      : ({
+          tone: 'good',
+          headline: 'Funded for life',
+          detail: 'Income needs met every year, with money still in the pots at the end.',
+        } as const)
+
+  /*
+   * Element trees, not rendered output — only the panels the active tab (or a
+   * print) actually mounts cost anything. Grouping them this way is what keeps
+   * the page from being ten charts deep before you reach the one you wanted.
+   */
+  const panels: Record<TabId, ReactNode> = {
+    overview: (
+      <>
+        <SpendingSummary assumptions={deferred} rows={rows} />
+
+        <Panel
+          title="Wealth over time"
+          action={
+            <SegmentedToggle
+              value={chartMode}
+              onChange={setChartMode}
+              ariaLabel="Wealth chart mode"
+              options={
+                [
+                  ['stacked', 'Stacked total'],
+                  ['lines', 'Compare pots'],
+                ] as const
+              }
+            />
+          }
+          description="Pots and DC pensions only — salary-based pensions pay an income and hold no balance."
+        >
+          <WealthChart
+            assumptions={deferred}
+            rows={rows}
+            shortfallYear={shortfall?.year ?? null}
+            drawdownYear={drawdownRow?.year ?? null}
+            unlocks={unlocks}
+            mode={chartMode}
+          />
+        </Panel>
+
+        <Panel
+          title="Income vs outgoings"
+          description={
+            <>
+              Where household income comes from each year — drawdown bars are coloured by the pot
+              funding them. Bars show <strong>gross</strong> amounts, so in retirement they sit above
+              the outgoings line by the income tax due; hover for the tax and after-tax figures.
+              Mortgage ends {mortgagePaidOffYear}.
+            </>
+          }
+        >
+          <IncomeChart
+            assumptions={deferred}
+            rows={rows}
+            drawdownYear={drawdownRow?.year ?? null}
+          />
+        </Panel>
+
+        <Panel
+          title="Contributions by pot"
+          description="What goes into savings each year, split by destination. Pot colours match the other charts, and the stack steps down as each person stops working. LISA figures include the government bonus."
+        >
+          <ContributionsChart assumptions={deferred} rows={rows} />
+        </Panel>
+      </>
+    ),
+    risk: (
+      <>
+        <Panel>
+          <TradeoffChart assumptions={deferred} />
+        </Panel>
+
+        <Panel>
+          <MonteCarloChart assumptions={deferred} />
+        </Panel>
+
+        <Panel title="What the plan hangs on">
+          <SensitivityChart assumptions={deferred} />
+        </Panel>
+
+        <Panel
+          title="Tax band headroom"
+          description={
+            <>
+              Each person's taxable income against the bands. The gap to the {a.tax.higherRatePct}%
+              line is how much more could be drawn that year before the marginal rate jumps — the
+              room to shift drawdown between you, or between years.
+            </>
+          }
+        >
+          <TaxHeadroomChart assumptions={deferred} rows={rows} />
+        </Panel>
+      </>
+    ),
+    years: (
+      <>
+        <Panel>
+          <IncomeTable
+            assumptions={deferred}
+            rows={rows}
+            title="Income by source"
+            badge={<StrategyBadge strategy={a.drawdownStrategy} />}
+          />
+        </Panel>
+
+        <Panel>
+          <BalancesTable
+            assumptions={deferred}
+            rows={rows}
+            title="Pot balances by year"
+            badge={<StrategyBadge strategy={a.drawdownStrategy} />}
+          />
+        </Panel>
+      </>
+    ),
+  }
+
+  async function handlePrint() {
+    // The tabs keep eight of the ten result panels unmounted, and the browser
+    // takes its print snapshot synchronously — so everything has to be on the
+    // page, laid out and measured, before the dialog opens. Recharts sizes
+    // itself from a ResizeObserver, which lands a frame or two after mount,
+    // hence the wait rather than a single animation frame.
+    setPrintAll(true)
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      window.print()
+    } finally {
+      setPrintAll(false)
+    }
+  }
 
   function handleReset() {
     if (!confirm('Reset all inputs to the default example and erase your saved data on this device?'))
@@ -178,7 +356,7 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => void handlePrint()}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
               title="Opens your browser's print dialog — choose Save as PDF"
             >
@@ -249,8 +427,13 @@ function App() {
       </header>
 
       <main className="mx-auto flex max-w-[1800px] flex-col gap-6 px-4 py-6 lg:flex-row">
+        {/*
+          Below lg the two columns stack, and the inputs are long enough that
+          leading with them buries the answer thousands of pixels down the page.
+          Results first on a phone; side by side from lg up.
+        */}
         <aside
-          className={`no-print w-full shrink-0 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 lg:w-96 ${
+          className={`no-print order-last w-full shrink-0 rounded-2xl border border-slate-200 bg-white lg:order-none lg:w-96 dark:border-slate-700 dark:bg-slate-800 ${
             showInputs ? '' : 'hidden'
           }`}
         >
@@ -398,7 +581,7 @@ function App() {
                 type="checkbox"
                 checked={a.tax.enabled}
                 onChange={(e) => update('tax', { ...a.tax, enabled: e.target.checked })}
-                className="h-4 w-4 rounded accent-blue-600"
+                className="h-4 w-4 rounded accent-ink-600"
               />
               Apply income tax to pension income
             </label>
@@ -504,261 +687,198 @@ function App() {
           </InputSection>
 
           <div className="px-4 py-4">
-            <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+            <p className="rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-700 dark:bg-ink-950 dark:text-ink-300">
               🔒 Your numbers stay on this device — everything is stored only in this browser's local
               storage. Nothing is sent to a server.
             </p>
           </div>
         </aside>
 
-        <section className="min-w-0 flex-1 space-y-6">
+        <section className="min-w-0 flex-1 space-y-5">
           <PrintHeader assumptions={a} />
 
           <div className="no-print">
             <RetirementAgeBar people={a.people} onChange={(people) => update('people', people)} />
           </div>
 
-          <div className="no-print">
-            <AssumptionBar assumptions={a} onChange={replaceAll} />
-          </div>
-
-          <div
-            className={`space-y-6 transition-opacity duration-150 ${stale ? 'opacity-60' : ''}`}
-          >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {earliestByPerson.map(({ person, earliestAge, searchedUpTo }) => {
-              // With more than one person, say what the others are doing —
-              // otherwise the ages read as if they could all happen together.
-              const others = a.people
-                .filter((p) => p.id !== person.id)
-                .map((p) => `${p.name} at ${p.retirementAge}`)
-                .join(' and ')
-              return (
-                <SummaryCard
-                  key={person.id}
-                  label={`${person.name}: earliest retirement`}
-                  value={earliestAge ?? `${searchedUpTo}+`}
-                  tone={earliestAge ? 'good' : 'bad'}
+          <div className={`space-y-5 transition-opacity duration-150 ${stale ? 'opacity-60' : ''}`}>
+            {/*
+              The hero answers the only question the page exists to answer, so
+              it gets a verdict in words and the three or four figures that
+              decide it. Everything else is support, below.
+            */}
+            <div className="print-block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-200 px-5 py-3 dark:border-slate-700">
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${verdictPill[verdict.tone]}`}
+                >
+                  {verdict.headline}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{verdict.detail}</span>
+              </div>
+              <div className={`grid grid-cols-1 gap-x-6 gap-y-7 px-5 py-6 ${heroGrid}`}>
+                {earliestByPerson.map(({ person, earliestAge, searchedUpTo }) => {
+                  // With more than one person, say what the others are doing —
+                  // otherwise the ages read as if they could all happen together.
+                  const others = a.people
+                    .filter((p) => p.id !== person.id)
+                    .map((p) => `${p.name} at ${p.retirementAge}`)
+                    .join(' and ')
+                  return (
+                    <HeroStat
+                      key={person.id}
+                      label={`Earliest retirement — ${person.name}`}
+                      value={earliestAge ?? `${searchedUpTo}+`}
+                      tone={earliestAge ? 'good' : 'bad'}
+                      sub={
+                        earliestAge
+                          ? others
+                            ? `Household income needs met for life, with ${others}.`
+                            : 'Household income needs met for life.'
+                          : `Still falls short retiring at ${searchedUpTo}.`
+                      }
+                    />
+                  )
+                })}
+                <HeroStat
+                  label="Total shortfall"
+                  value={shortfall ? formatCurrency(shortfallTotals.total) : 'None'}
+                  tone={shortfall ? 'bad' : 'good'}
                   sub={
-                    earliestAge
-                      ? others
-                        ? `Household income needs met for life, with ${others}.`
-                        : 'Household income needs met for life.'
-                      : `Still falls short retiring at ${searchedUpTo}.`
+                    shortfall ? (
+                      <>
+                        Before {shortfallTotals.unlockAge}:{' '}
+                        <strong>{formatCurrency(shortfallTotals.beforeUnlock)}</strong> · from{' '}
+                        {shortfallTotals.unlockAge}:{' '}
+                        <strong>{formatCurrency(shortfallTotals.afterUnlock)}</strong>
+                        <br />
+                        Worst year {formatCurrency(worstShortfall?.shortfall ?? 0)} in{' '}
+                        {shortfall.year}
+                      </>
+                    ) : (
+                      'Income needs met every year.'
+                    )
                   }
                 />
-              )
-            })}
-            <SummaryCard
-              label="Total shortfall"
-              value={shortfall ? formatCurrency(shortfallTotals.total) : 'None'}
-              tone={shortfall ? 'bad' : 'good'}
-              sub={
-                shortfall ? (
-                  <>
-                    Before {shortfallTotals.unlockAge}:{' '}
-                    <strong>{formatCurrency(shortfallTotals.beforeUnlock)}</strong> · from{' '}
-                    {shortfallTotals.unlockAge}:{' '}
-                    <strong>{formatCurrency(shortfallTotals.afterUnlock)}</strong>
-                    <br />
-                    {shortfallTotals.yearsShort} short years · worst{' '}
-                    {formatCurrency(worstShortfall?.shortfall ?? 0)} in {shortfall.year}
-                  </>
-                ) : (
-                  'Income needs met every year.'
-                )
-              }
-            />
-            <SummaryCard
-              label="Pots run dry"
-              value={exhausted ? `Age ${exhausted.people[0].age}` : 'Never'}
-              tone={exhausted ? 'warn' : 'good'}
-              sub={
-                exhausted
-                  ? `${exhausted.year} — ${exhausted.people
-                      .map((p) => `${p.name} ${p.age}`)
-                      .join(', ')}`
-                  : 'Savings and pensions outlast the plan.'
-              }
-            />
-            <SummaryCard
-              label="Pots when all retired"
-              value={formatCurrency(potAtRetirement)}
-              sub={
-                lockedAtRetirement > 0
-                  ? `${formatCurrency(lockedAtRetirement)} still locked then`
-                  : 'Pensions + all savings pots'
-              }
-            />
-            <SummaryCard
-              label="Pension pot remaining"
-              value={formatCurrency(finalRow?.pensionsTotal ?? 0)}
-              tone={(finalRow?.pensionsTotal ?? 0) > 0 ? 'good' : 'warn'}
-              sub={
-                finalRow
-                  ? `At ${finalRow.year} (${finalRow.people
-                      .map((p) => `${p.name} ${p.age}`)
-                      .join(', ')})`
-                  : undefined
-              }
-            />
-            <SummaryCard
-              label="Savings remaining"
-              value={formatCurrency(finalRow?.potsTotal ?? 0)}
-              tone={(finalRow?.potsTotal ?? 0) > 0 ? 'good' : 'warn'}
-              sub={
-                finalRow && deferred.pots.length > 0
-                  ? deferred.pots
-                      .map(
-                        (pot, i) =>
-                          `${pot.name} ${formatCurrency(finalRow.potBalances[i] ?? 0)}`,
-                      )
-                      .join(' · ')
-                  : 'No savings pots'
-              }
-            />
-            <SummaryCard
-              label="Guaranteed income for life"
-              value={formatCurrency(guaranteedInRetirement)}
-              sub="State + salary-based pensions"
-            />
-            <SummaryCard
-              label="Most you could spend"
-              value={maxIncome.impossible ? 'Nothing works' : formatCurrency(maxIncome.annual)}
-              tone={
-                maxIncome.impossible
-                  ? 'bad'
-                  : maxIncome.annual >= plannedRetirementSpend
-                    ? 'good'
-                    : 'warn'
-              }
-              sub={
-                maxIncome.impossible
-                  ? 'Short even spending nothing — the gap is income, not spending.'
-                  : `A year, flat, emptying everything by the end · ${formatMonthly(maxIncome.annual)} a month. You plan ${formatCurrency(plannedRetirementSpend)}${maxIncome.annual >= plannedRetirementSpend ? ` — ${formatCurrency(maxIncome.annual - plannedRetirementSpend)} of room` : ` — ${formatCurrency(plannedRetirementSpend - maxIncome.annual)} too much`}.`
-              }
-            />
-          </div>
-
-          <SpendingSummary assumptions={deferred} rows={rows} />
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <TradeoffChart assumptions={deferred} />
-          </div>
-
-          {shortfall && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
-              {shortfall.blockedByLock ? (
-                <>
-                  In <strong>{shortfall.year}</strong> the household is short{' '}
-                  <strong>{formatCurrency(shortfall.shortfall)}</strong>. There is still{' '}
-                  {formatCurrency(shortfall.lockedBalance)} saved, but it's locked at that point.
-                </>
-              ) : (
-                <>
-                  In <strong>{shortfall.year}</strong> the money runs out — short{' '}
-                  <strong>{formatCurrency(shortfall.shortfall)}</strong> that year.
-                </>
-              )}{' '}
-              {earliest.earliestAge && (
-                <>
-                  {primary.name} retiring at <strong>{earliest.earliestAge}</strong> would clear it on
-                  these assumptions.
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
-              <h2 className="text-sm font-semibold">Wealth over time</h2>
-              <div className="flex shrink-0 overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600">
-                {(['stacked', 'lines'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setChartMode(m)}
-                    className={`px-2.5 py-1 text-xs font-medium ${
-                      chartMode === m
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {m === 'stacked' ? 'Stacked total' : 'Compare pots'}
-                  </button>
-                ))}
+                <HeroStat
+                  label="Pots run dry"
+                  value={exhausted ? exhausted.people[0].age : 'Never'}
+                  unit={exhausted ? 'years old' : undefined}
+                  tone={exhausted ? 'warn' : 'good'}
+                  sub={
+                    exhausted
+                      ? `${exhausted.year} — ${exhausted.people
+                          .map((p) => `${p.name} ${p.age}`)
+                          .join(', ')}`
+                      : 'Savings and pensions outlast the plan.'
+                  }
+                />
               </div>
             </div>
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Pots and DC pensions only — salary-based pensions pay an income and hold no balance.
-            </p>
-            <WealthChart
-              assumptions={deferred}
-              rows={rows}
-              shortfallYear={shortfall?.year ?? null}
-              drawdownYear={drawdownRow?.year ?? null}
-              unlocks={unlocks}
-              mode={chartMode}
-            />
-          </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <h2 className="mb-1 text-sm font-semibold">Income vs outgoings</h2>
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Where household income comes from each year — drawdown bars are coloured by the pot
-              funding them. Bars show <strong>gross</strong> amounts, so in retirement they sit above
-              the outgoings line by the income tax due; hover for the tax and after-tax figures.
-              Mortgage ends {mortgagePaidOffYear}.
-            </p>
-            <IncomeChart assumptions={deferred} rows={rows} drawdownYear={drawdownRow?.year ?? null} />
-          </div>
+            {shortfall && (
+              <div className="print-block rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                {shortfall.blockedByLock ? (
+                  <>
+                    In <strong>{shortfall.year}</strong> the household is short{' '}
+                    <strong>{formatCurrency(shortfall.shortfall)}</strong>. There is still{' '}
+                    {formatCurrency(shortfall.lockedBalance)} saved, but it's locked at that point.
+                  </>
+                ) : (
+                  <>
+                    In <strong>{shortfall.year}</strong> the money runs out — short{' '}
+                    <strong>{formatCurrency(shortfall.shortfall)}</strong> that year.
+                  </>
+                )}{' '}
+                {earliest.earliestAge && (
+                  <>
+                    {primary.name} retiring at <strong>{earliest.earliestAge}</strong> would clear it
+                    on these assumptions.
+                  </>
+                )}
+              </div>
+            )}
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <h2 className="mb-1 text-sm font-semibold">Tax band headroom</h2>
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Each person's taxable income against the bands. The gap to the {a.tax.higherRatePct}%
-              line is how much more could be drawn that year before the marginal rate jumps — the
-              room to shift drawdown between you, or between years.
-            </p>
-            <TaxHeadroomChart assumptions={deferred} rows={rows} />
-          </div>
+            {/* Everything the hero leaves out, deliberately quiet. */}
+            <div className="print-block rounded-2xl border border-slate-200 bg-white py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="grid grid-cols-1 gap-y-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 xl:gap-y-0 xl:divide-x xl:divide-slate-200 xl:dark:divide-slate-700">
+                <SummaryCard
+                  label="Pot at retirement"
+                  value={formatCurrency(potAtRetirement)}
+                  sub={
+                    lockedAtRetirement > 0
+                      ? `${formatCurrency(lockedAtRetirement)} still locked then`
+                      : 'Pensions + all savings pots'
+                  }
+                />
+                <SummaryCard
+                  label="Pension at the end"
+                  value={formatCurrency(finalRow?.pensionsTotal ?? 0)}
+                  tone={(finalRow?.pensionsTotal ?? 0) > 0 ? 'good' : 'warn'}
+                  sub={
+                    finalRow
+                      ? `At ${finalRow.year} (${finalRow.people
+                          .map((p) => `${p.name} ${p.age}`)
+                          .join(', ')})`
+                      : undefined
+                  }
+                />
+                <SummaryCard
+                  label="Savings at the end"
+                  value={formatCurrency(finalRow?.potsTotal ?? 0)}
+                  tone={(finalRow?.potsTotal ?? 0) > 0 ? 'good' : 'warn'}
+                  sub={
+                    finalRow && deferred.pots.length > 0
+                      ? deferred.pots
+                          .map((pot, i) => `${pot.name} ${formatCurrency(finalRow.potBalances[i] ?? 0)}`)
+                          .join(' · ')
+                      : 'No savings pots'
+                  }
+                />
+                <SummaryCard
+                  label="Guaranteed for life"
+                  value={formatCurrency(guaranteedInRetirement)}
+                  sub="State + salary-based pensions, a year"
+                />
+                <SummaryCard
+                  label="Most you could spend"
+                  value={maxIncome.impossible ? 'Nothing works' : formatCurrency(maxIncome.annual)}
+                  tone={
+                    maxIncome.impossible
+                      ? 'bad'
+                      : maxIncome.annual >= plannedRetirementSpend
+                        ? 'good'
+                        : 'warn'
+                  }
+                  sub={
+                    maxIncome.impossible
+                      ? 'Short even spending nothing — the gap is income, not spending.'
+                      : `A year, flat, emptying everything by the end. You plan ${formatCurrency(plannedRetirementSpend)}${maxIncome.annual >= plannedRetirementSpend ? ` — ${formatCurrency(maxIncome.annual - plannedRetirementSpend)} of room` : ` — ${formatCurrency(plannedRetirementSpend - maxIncome.annual)} too much`}.`
+                  }
+                />
+              </div>
+            </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <MonteCarloChart assumptions={deferred} />
-          </div>
+            <div className="no-print">
+              <AssumptionBar assumptions={a} onChange={replaceAll} />
+            </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <h2 className="mb-1 text-sm font-semibold">What the plan hangs on</h2>
-            <SensitivityChart assumptions={deferred} />
-          </div>
+            <ResultTabs tabs={RESULT_TABS} value={tab} onChange={setTab} />
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <h2 className="mb-1 text-sm font-semibold">Contributions by pot</h2>
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              What goes into savings each year, split by destination. Pot colours match the other
-              charts, and the stack steps down as each person stops working. LISA figures include the
-              government bonus.
-            </p>
-            <ContributionsChart assumptions={deferred} rows={rows} />
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <IncomeTable
-              assumptions={deferred}
-              rows={rows}
-              title="Income by source"
-              badge={<StrategyBadge strategy={a.drawdownStrategy} />}
-            />
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <BalancesTable
-              assumptions={deferred}
-              rows={rows}
-              title="Pot balances by year"
-              badge={<StrategyBadge strategy={a.drawdownStrategy} />}
-            />
-          </div>
+            {RESULT_TABS.map(
+              ([id]) =>
+                (printAll || tab === id) && (
+                  <div
+                    key={id}
+                    role="tabpanel"
+                    id={`panel-${id}`}
+                    aria-labelledby={`tab-${id}`}
+                    className="space-y-5"
+                  >
+                    {panels[id]}
+                  </div>
+                ),
+            )}
           </div>
         </section>
       </main>

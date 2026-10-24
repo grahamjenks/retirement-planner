@@ -68,7 +68,7 @@ export function BalancesTable({ assumptions: a, rows, title, badge }: BalancesTa
                 onClick={() => setView(v)}
                 className={`px-2.5 py-1 text-xs font-medium ${
                   view === v
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-ink-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                 }`}
               >
@@ -175,12 +175,12 @@ export function BalancesTable({ assumptions: a, rows, title, badge }: BalancesTa
             {shown.map((row) => {
               const note = eventNoteFor(a, row)
               const highlight = a.people.some((p) => p.currentAge + row.t === p.retirementAge)
-              const rowBg = highlight ? 'bg-blue-50 dark:bg-blue-950/40' : ''
+              const rowBg = highlight ? 'bg-ink-50 dark:bg-ink-950/40' : ''
               return (
                 <tr key={row.t} className={`border-t border-slate-100 dark:border-slate-700 ${rowBg}`}>
                   <td
                     className={`sticky left-0 z-10 px-3 py-1.5 font-medium tabular-nums ${
-                      highlight ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-white dark:bg-slate-800'
+                      highlight ? 'bg-ink-50 dark:bg-ink-950/40' : 'bg-white dark:bg-slate-800'
                     }`}
                   >
                     {row.year}
@@ -319,12 +319,12 @@ function BreakdownTable({
         <tbody>
           {shown.map((row) => {
             const highlight = a.people.some((p) => p.currentAge + row.t === p.retirementAge)
-            const rowBg = highlight ? 'bg-blue-50 dark:bg-blue-950/40' : ''
+            const rowBg = highlight ? 'bg-ink-50 dark:bg-ink-950/40' : ''
             return (
               <tr key={row.t} className={`border-t border-slate-100 dark:border-slate-700 ${rowBg}`}>
                 <td
                   className={`sticky left-0 z-10 px-3 py-1.5 font-medium tabular-nums ${
-                    highlight ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-white dark:bg-slate-800'
+                    highlight ? 'bg-ink-50 dark:bg-ink-950/40' : 'bg-white dark:bg-slate-800'
                   }`}
                 >
                   {row.year}
@@ -378,7 +378,7 @@ function Num({
     : tone === 'grow'
       ? 'text-emerald-600 dark:text-emerald-400'
       : tone === 'in'
-        ? 'text-blue-600 dark:text-blue-400'
+        ? 'text-ink-600 dark:text-ink-400'
         : tone === 'out'
           ? 'text-rose-600 dark:text-rose-400'
           : tone === 'oneOff'

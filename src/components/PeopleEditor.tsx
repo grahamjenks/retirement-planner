@@ -47,7 +47,7 @@ export function PeopleEditor({ people, inflationRate, tax, onChange }: PeopleEdi
         <button
           type="button"
           onClick={addPartner}
-          className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:text-blue-400"
+          className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-ink-400 hover:text-ink-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-ink-500 dark:hover:text-ink-400"
         >
           + Add a partner
         </button>
@@ -117,7 +117,7 @@ function PersonCard({
           type="text"
           value={person.name}
           onChange={(e) => onChange({ name: e.target.value })}
-          className="min-w-0 flex-1 border-b border-transparent bg-transparent text-sm font-semibold text-slate-800 hover:border-slate-300 focus:border-blue-500 focus:outline-none dark:text-slate-100"
+          className="min-w-0 flex-1 border-b border-transparent bg-transparent text-sm font-semibold text-slate-800 hover:border-slate-300 focus:border-ink-500 focus:outline-none dark:text-slate-100"
           aria-label="Name"
         />
         {canRemove && (
@@ -143,7 +143,7 @@ function PersonCard({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="mt-1 block w-full truncate text-left text-[11px] text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+          className="mt-1 block w-full truncate text-left text-[11px] text-slate-400 hover:text-ink-600 dark:hover:text-ink-400"
         >
           {personSummary} · {pensionSummary}
         </button>
@@ -257,7 +257,7 @@ function PersonCard({
               onClick={() => onChange({ pensionType: value })}
               className={`flex-1 px-2 py-1.5 text-xs font-medium ${
                 person.pensionType === value
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-ink-600 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
@@ -393,7 +393,7 @@ function SchemeCard({ scheme, person, onChange, onRemove }: SchemeCardProps) {
           type="text"
           value={scheme.name}
           onChange={(e) => onChange({ name: e.target.value })}
-          className="min-w-0 flex-1 border-b border-transparent bg-transparent text-sm font-semibold text-slate-800 hover:border-slate-300 focus:border-blue-500 focus:outline-none dark:text-slate-100"
+          className="min-w-0 flex-1 border-b border-transparent bg-transparent text-sm font-semibold text-slate-800 hover:border-slate-300 focus:border-ink-500 focus:outline-none dark:text-slate-100"
           aria-label="Scheme name"
         />
         <button
@@ -446,7 +446,7 @@ function SchemeCard({ scheme, person, onChange, onRemove }: SchemeCardProps) {
           type="checkbox"
           checked={scheme.accruing}
           onChange={(e) => onChange({ accruing: e.target.checked })}
-          className="h-3.5 w-3.5 rounded accent-blue-600"
+          className="h-3.5 w-3.5 rounded accent-ink-600"
         />
         Still building up (untick for a preserved scheme like Nuvos)
       </label>
@@ -456,7 +456,7 @@ function SchemeCard({ scheme, person, onChange, onRemove }: SchemeCardProps) {
           type="checkbox"
           checked={scheme.followsStatePensionAge}
           onChange={(e) => onChange({ followsStatePensionAge: e.target.checked })}
-          className="h-3.5 w-3.5 rounded accent-blue-600"
+          className="h-3.5 w-3.5 rounded accent-ink-600"
         />
         Pension age follows State Pension Age ({person.statePensionAge}) — alpha
       </label>
@@ -494,7 +494,7 @@ function AddSchemeButton({ onAdd }: { onAdd: (scheme: DbScheme) => void }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:text-blue-400"
+        className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-ink-400 hover:text-ink-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-ink-500 dark:hover:text-ink-400"
       >
         + Add a pension scheme
       </button>

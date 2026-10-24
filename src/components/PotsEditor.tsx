@@ -91,7 +91,7 @@ export function PotsEditor({ assumptions: a, onChange }: PotsEditorProps) {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:text-blue-400"
+          className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-ink-400 hover:text-ink-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-ink-500 dark:hover:text-ink-400"
         >
           + Add savings pot
         </button>
@@ -140,7 +140,7 @@ function PotCard({
           type="text"
           value={pot.name}
           onChange={(e) => onChange({ name: e.target.value })}
-          className="min-w-0 flex-1 border-b border-transparent bg-transparent text-sm font-semibold text-slate-800 hover:border-slate-300 focus:border-blue-500 focus:outline-none dark:text-slate-100"
+          className="min-w-0 flex-1 border-b border-transparent bg-transparent text-sm font-semibold text-slate-800 hover:border-slate-300 focus:border-ink-500 focus:outline-none dark:text-slate-100"
           aria-label="Pot name"
         />
         <button
@@ -242,7 +242,7 @@ function PotCard({
         <div className="mt-2 flex flex-wrap gap-1.5">
           {drawdownPosition ? (
             <span
-              className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+              className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-700 dark:bg-ink-950 dark:text-ink-300"
               title="Position in your drawdown order"
             >
               Drawn #{drawdownPosition}
@@ -271,7 +271,7 @@ function PotCard({
       <button
         type="button"
         onClick={() => setShowAdvanced((s) => !s)}
-        className="mt-2 text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+        className="mt-2 text-xs text-slate-400 hover:text-ink-600 dark:hover:text-ink-400"
       >
         {showAdvanced ? 'Hide' : 'Show'} government bonus settings
       </button>
@@ -318,7 +318,7 @@ function FollowRetirementToggle({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-slate-300 accent-blue-600 dark:border-slate-600"
+        className="h-3.5 w-3.5 rounded border-slate-300 accent-ink-600 dark:border-slate-600"
       />
       <span>
         {label} <span className="text-slate-400">({retirementAge})</span>

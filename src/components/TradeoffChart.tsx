@@ -81,10 +81,11 @@ function TradeoffChartBase({ assumptions: a }: TradeoffChartProps) {
             <XAxis
               dataKey="age"
               tick={{ fontSize: 12 }}
+              height={42}
               label={{
                 value: `${person.name} retires at…`,
                 position: 'insideBottom',
-                offset: -10,
+                offset: 2,
                 fontSize: 11,
               }}
             />

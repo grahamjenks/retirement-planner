@@ -129,7 +129,7 @@ function StrategyOption({ label, description, checked, onSelect }: StrategyOptio
     <label
       className={`flex cursor-pointer gap-2 rounded-lg border p-2 ${
         checked
-          ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
+          ? 'border-ink-500 bg-ink-50 dark:border-ink-500 dark:bg-ink-950/40'
           : 'border-slate-200 hover:border-slate-300 dark:border-slate-600'
       }`}
     >
@@ -138,7 +138,7 @@ function StrategyOption({ label, description, checked, onSelect }: StrategyOptio
         name="drawdown-strategy"
         checked={checked}
         onChange={onSelect}
-        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-blue-600"
+        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-ink-600"
       />
       <span className="min-w-0">
         <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">{label}</span>
