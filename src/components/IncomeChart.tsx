@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import {
   Bar,
   CartesianGrid,
@@ -22,7 +23,8 @@ import {
   STATE_PENSION_COLOR,
 } from './chartColors'
 import { IncomeTooltip } from './IncomeTooltip'
-import { makeYearAgeTick, yearAxisLabel } from './YearAxisTick'
+import { YearAgeTick } from './YearAxisTick'
+import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 interface IncomeChartProps {
   assumptions: Assumptions
@@ -30,13 +32,13 @@ interface IncomeChartProps {
   drawdownYear: number | null
 }
 
-export function IncomeChart({ assumptions: a, rows, drawdownYear }: IncomeChartProps) {
+function IncomeChartBase({ assumptions: a, rows, drawdownYear }: IncomeChartProps) {
   const lastYear = rows.length > 0 ? rows[rows.length - 1].year : 0
   const baseYear = rows.length > 0 ? rows[0].year : 0
   const retireRows = labelRows(a.people.map((p) => p.retirementAge - p.currentAge))
   const hasDb = a.people.some((p) => p.pensionType === 'db')
   const dcPeople = a.people.filter((p) => p.pensionType === 'dc')
-  const YearTick = makeYearAgeTick(rows)
+  const tickAges = useMemo(() => agesByYearFrom(rows), [rows])
 
   const data = rows.map((r) => {
     const point: Record<string, number> = {
@@ -83,7 +85,7 @@ export function IncomeChart({ assumptions: a, rows, drawdownYear }: IncomeChartP
           )}
           <XAxis
             dataKey="year"
-            tick={<YearTick />}
+            tick={<YearAgeTick agesByYear={tickAges} />}
             height={42}
             interval="preserveStartEnd"
             minTickGap={24}
@@ -167,3 +169,11 @@ export function IncomeChart({ assumptions: a, rows, drawdownYear }: IncomeChartP
     </div>
   )
 }
+
+/**
+ * Memoised: the page re-renders for things these charts do not care about —
+ * a toggle elsewhere, a panel opening — and redrawing every series for that
+ * is the bulk of the work. Props are the deferred assumptions and the rows
+ * built from them, both stable between unrelated renders.
+ */
+export const IncomeChart = memo(IncomeChartBase)

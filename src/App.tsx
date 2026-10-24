@@ -720,7 +720,7 @@ function App() {
               line is how much more could be drawn that year before the marginal rate jumps — the
               room to shift drawdown between you, or between years.
             </p>
-            <TaxHeadroomChart assumptions={a} rows={rows} />
+            <TaxHeadroomChart assumptions={deferred} rows={rows} />
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">

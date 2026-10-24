@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import {
   Bar,
   BarChart,
@@ -24,7 +24,7 @@ interface SensitivityChartProps {
  * by how far the outcome moves. The point is to show which assumptions the plan
  * actually hangs on, rather than implying the central case is precise.
  */
-export function SensitivityChart({ assumptions: a }: SensitivityChartProps) {
+function SensitivityChartBase({ assumptions: a }: SensitivityChartProps) {
   const base = useMemo(() => planHeadroom(a), [a])
   const factors = useMemo(() => sensitivity(a), [a])
 
@@ -93,3 +93,11 @@ export function SensitivityChart({ assumptions: a }: SensitivityChartProps) {
     </div>
   )
 }
+
+/**
+ * Memoised: the page re-renders for things these charts do not care about —
+ * a toggle elsewhere, a panel opening — and redrawing every series for that
+ * is the bulk of the work. Props are the deferred assumptions and the rows
+ * built from them, both stable between unrelated renders.
+ */
+export const SensitivityChart = memo(SensitivityChartBase)

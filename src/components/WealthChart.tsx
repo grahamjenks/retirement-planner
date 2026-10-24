@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import {
   Area,
   CartesianGrid,
@@ -16,7 +17,8 @@ import type { Assumptions, YearRow } from '../lib/types'
 import { ALERT_COLOR, PENSION_COLORS, POT_COLORS } from './chartColors'
 import { WealthTooltip } from './WealthTooltip'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
-import { makeYearAgeTick, yearAxisLabel } from './YearAxisTick'
+import { YearAgeTick } from './YearAxisTick'
+import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 export type WealthChartMode = 'stacked' | 'lines'
 
@@ -33,7 +35,7 @@ function baseYearOf(rows: { year: number }[]): number {
   return rows.length > 0 ? rows[0].year : 0
 }
 
-export function WealthChart({
+function WealthChartBase({
   assumptions: a,
   rows,
   shortfallYear,
@@ -47,7 +49,7 @@ export function WealthChart({
   const retireRows = labelRows(a.people.map((p) => p.retirementAge - p.currentAge))
   const unlockRows = labelRows(unlocks.map((u) => u.t))
   const dcPeople = a.people.filter((p) => p.pensionType === 'dc')
-  const YearTick = makeYearAgeTick(rows)
+  const tickAges = useMemo(() => agesByYearFrom(rows), [rows])
   // A drawdown marker sitting on a retirement year would print on top of it.
   const retirementYears = new Set(
     a.people.map((p) => baseYearOf(rows) + (p.retirementAge - p.currentAge)),
@@ -99,7 +101,7 @@ export function WealthChart({
           )}
           <XAxis
             dataKey="year"
-            tick={<YearTick />}
+            tick={<YearAgeTick agesByYear={tickAges} />}
             height={42}
             interval="preserveStartEnd"
             minTickGap={24}
@@ -203,3 +205,11 @@ export function WealthChart({
     </div>
   )
 }
+
+/**
+ * Memoised: the page re-renders for things these charts do not care about —
+ * a toggle elsewhere, a panel opening — and redrawing every series for that
+ * is the bulk of the work. Props are the deferred assumptions and the rows
+ * built from them, both stable between unrelated renders.
+ */
+export const WealthChart = memo(WealthChartBase)

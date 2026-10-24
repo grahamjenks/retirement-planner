@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import {
   Bar,
   CartesianGrid,
@@ -13,7 +14,8 @@ import { formatCurrency, formatCurrencyCompact } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import { PENSION_COLORS, POT_COLORS } from './chartColors'
-import { makeYearAgeTick, yearAxisLabel } from './YearAxisTick'
+import { YearAgeTick } from './YearAxisTick'
+import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 interface ContributionsChartProps {
   assumptions: Assumptions
@@ -25,11 +27,11 @@ interface ContributionsChartProps {
  * income chart. Contributions stop at each person's retirement, so the stack
  * steps down as they finish work.
  */
-export function ContributionsChart({ assumptions: a, rows }: ContributionsChartProps) {
+function ContributionsChartBase({ assumptions: a, rows }: ContributionsChartProps) {
   const baseYear = rows.length > 0 ? rows[0].year : 0
   const retireRows = labelRows(a.people.map((p) => p.retirementAge - p.currentAge))
   const dcPeople = a.people.filter((p) => p.pensionType === 'dc')
-  const YearTick = makeYearAgeTick(rows)
+  const tickAges = useMemo(() => agesByYearFrom(rows), [rows])
 
   const totalIn = (r: YearRow) =>
     r.potContributions.reduce((s, c) => s + c, 0) +
@@ -79,7 +81,7 @@ export function ContributionsChart({ assumptions: a, rows }: ContributionsChartP
           <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
           <XAxis
             dataKey="year"
-            tick={<YearTick />}
+            tick={<YearAgeTick agesByYear={tickAges} />}
             height={42}
             interval="preserveStartEnd"
             minTickGap={24}
@@ -154,3 +156,11 @@ export function ContributionsChart({ assumptions: a, rows }: ContributionsChartP
     </div>
   )
 }
+
+/**
+ * Memoised: the page re-renders for things these charts do not care about —
+ * a toggle elsewhere, a panel opening — and redrawing every series for that
+ * is the bulk of the work. Props are the deferred assumptions and the rows
+ * built from them, both stable between unrelated renders.
+ */
+export const ContributionsChart = memo(ContributionsChartBase)
