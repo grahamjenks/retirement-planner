@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import {
   CartesianGrid,
   ComposedChart,
@@ -13,7 +14,8 @@ import {
 import { formatCurrency, formatCurrencyCompact } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { PENSION_COLORS } from './chartColors'
-import { makeYearAgeTick, yearAxisLabel } from './YearAxisTick'
+import { YearAgeTick } from './YearAxisTick'
+import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 interface TaxHeadroomChartProps {
   assumptions: Assumptions
@@ -25,8 +27,8 @@ interface TaxHeadroomChartProps {
  * the 40% threshold is the actionable number: it says how much more could be
  * drawn in a given year before the marginal rate doubles.
  */
-export function TaxHeadroomChart({ assumptions: a, rows }: TaxHeadroomChartProps) {
-  const YearTick = makeYearAgeTick(rows)
+function TaxHeadroomChartBase({ assumptions: a, rows }: TaxHeadroomChartProps) {
+  const tickAges = useMemo(() => agesByYearFrom(rows), [rows])
   const t = a.tax
   // Bands are drawn at the untapered allowance; the taper only bites well above
   // the higher-rate line and would make the guides move about confusingly.
@@ -65,7 +67,7 @@ export function TaxHeadroomChart({ assumptions: a, rows }: TaxHeadroomChartProps
 
           <XAxis
             dataKey="year"
-            tick={<YearTick />}
+            tick={<YearAgeTick agesByYear={tickAges} />}
             height={42}
             interval="preserveStartEnd"
             minTickGap={24}
@@ -132,3 +134,11 @@ export function TaxHeadroomChart({ assumptions: a, rows }: TaxHeadroomChartProps
     </div>
   )
 }
+
+/**
+ * Memoised: the page re-renders for things these charts do not care about —
+ * a toggle elsewhere, a panel opening — and redrawing every series for that
+ * is the bulk of the work. Props are the deferred assumptions and the rows
+ * built from them, both stable between unrelated renders.
+ */
+export const TaxHeadroomChart = memo(TaxHeadroomChartBase)

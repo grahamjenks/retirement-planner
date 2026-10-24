@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import {
   Area,
   CartesianGrid,
@@ -16,7 +16,8 @@ import { runMonteCarlo } from '../lib/montecarlo'
 import { simulate } from '../lib/projection'
 import type { Assumptions } from '../lib/types'
 import { ALERT_COLOR } from './chartColors'
-import { makeYearAgeTick, yearAxisLabel } from './YearAxisTick'
+import { YearAgeTick } from './YearAxisTick'
+import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 interface MonteCarloChartProps {
   assumptions: Assumptions
@@ -32,7 +33,7 @@ const TRIAL_CHOICES = [200, 500, 1000] as const
  * crash at 85, because units are being sold to live on. The spread here is what
  * a single confident line cannot show.
  */
-export function MonteCarloChart({ assumptions: a }: MonteCarloChartProps) {
+function MonteCarloChartBase({ assumptions: a }: MonteCarloChartProps) {
   const [volatility, setVolatility] = useState(15)
   const [trials, setTrials] = useState<number>(500)
   const [seed, setSeed] = useState(42)
@@ -59,7 +60,7 @@ export function MonteCarloChart({ assumptions: a }: MonteCarloChartProps) {
         ? 'text-amber-600 dark:text-amber-400'
         : 'text-rose-600 dark:text-rose-400'
 
-  const YearTick = makeYearAgeTick(baseline)
+  const tickAges = useMemo(() => agesByYearFrom(baseline), [baseline])
   const medianDryAge =
     result.runsDryAges.length > 0
       ? result.runsDryAges[Math.floor(result.runsDryAges.length / 2)]
@@ -128,7 +129,7 @@ export function MonteCarloChart({ assumptions: a }: MonteCarloChartProps) {
             <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
             <XAxis
               dataKey="year"
-              tick={<YearTick />}
+              tick={<YearAgeTick agesByYear={tickAges} />}
               height={42}
               interval="preserveStartEnd"
               minTickGap={24}
@@ -206,3 +207,11 @@ export function MonteCarloChart({ assumptions: a }: MonteCarloChartProps) {
     </div>
   )
 }
+
+/**
+ * Memoised: the page re-renders for things these charts do not care about —
+ * a toggle elsewhere, a panel opening — and redrawing every series for that
+ * is the bulk of the work. Props are the deferred assumptions and the rows
+ * built from them, both stable between unrelated renders.
+ */
+export const MonteCarloChart = memo(MonteCarloChartBase)

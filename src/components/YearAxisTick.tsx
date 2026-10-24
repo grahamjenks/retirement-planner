@@ -1,4 +1,3 @@
-import type { YearRow } from '../lib/types'
 
 interface TickProps {
   x?: number
@@ -6,19 +5,26 @@ interface TickProps {
   payload?: { value?: number | string }
 }
 
+
 /**
  * X-axis tick showing the calendar year with everyone's age beneath it, so a
  * point on the chart can be read as "2041 — she's 55, he's 57" without
  * counting along from today.
+ *
+ * Declared once rather than built per render: a component made inside render
+ * is a new type every time, and React throws away and rebuilds every tick in
+ * the axis rather than updating the ones already there. Recharts clones this
+ * element to add x, y and payload, so the ages ride along as a plain prop.
  */
-export function makeYearAgeTick(rows: YearRow[]) {
-  const agesByYear = new Map<number, number[]>()
-  rows.forEach((r) => agesByYear.set(r.year, r.people.map((p) => p.age)))
-
-  return function YearAgeTick({ x = 0, y = 0, payload }: TickProps) {
-    const year = Number(payload?.value)
-    const ages = agesByYear.get(year)
-    return (
+export function YearAgeTick({
+  agesByYear,
+  x = 0,
+  y = 0,
+  payload,
+}: TickProps & { agesByYear: Map<number, number[]> }) {
+  const year = Number(payload?.value)
+  const ages = agesByYear.get(year)
+  return (
       <g transform={`translate(${x},${y})`}>
         <text x={0} y={0} dy={12} textAnchor="middle" fontSize={11} className="fill-slate-500">
           {year}
@@ -28,13 +34,6 @@ export function makeYearAgeTick(rows: YearRow[]) {
             {ages.join('·')}
           </text>
         )}
-      </g>
-    )
-  }
-}
-
-/** "Year · ages (Me · Partner)" — names the numbers under each tick. */
-export function yearAxisLabel(rows: YearRow[]): string {
-  const names = rows[0]?.people.map((p) => p.name) ?? []
-  return names.length > 0 ? `Year · ages (${names.join(' · ')})` : 'Year'
+    </g>
+  )
 }
