@@ -11,6 +11,13 @@ import type {
 } from './types'
 
 /**
+ * The longest a projection will ever run, in years. Ages are bounded well
+ * below this when they are read in; this is the backstop that holds even if
+ * one is not.
+ */
+export const MAX_PROJECTION_YEARS = 120
+
+/**
  * The share of salary this person pays into a pension, as far as the model
  * accounts for it. Salary-based schemes take contributions too, but they are
  * not modelled here, so nothing is assumed for them.
@@ -186,10 +193,19 @@ export function simulate(
     a.people.map((p) => [p.id, retirementAgeFor(p, override)] as const),
   )
 
-  // Run to the last year anyone is expected to be alive.
-  const horizon = Math.max(
-    ...a.people.map((p) => Math.max(0, p.lifeExpectancy - p.currentAge)),
-    ...a.people.map((p) => Math.max(0, (retirementAges.get(p.id) ?? p.retirementAge) - p.currentAge)),
+  // Run to the last year anyone is expected to be alive, but never further
+  // than a life could run. Every year costs a pass of this loop, and the loop
+  // runs ~45 times for the retirement search and ~500 for Monte Carlo, so an
+  // age that slipped through — a hand-edited backup, a mistyped field — would
+  // otherwise hang the tab for hours with no way back.
+  const horizon = Math.min(
+    MAX_PROJECTION_YEARS,
+    Math.max(
+      ...a.people.map((p) => Math.max(0, p.lifeExpectancy - p.currentAge)),
+      ...a.people.map(
+        (p) => Math.max(0, (retirementAges.get(p.id) ?? p.retirementAge) - p.currentAge),
+      ),
+    ),
   )
 
   let balances = a.pots.map((p) => Math.max(0, p.balance))
