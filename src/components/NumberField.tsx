@@ -13,6 +13,11 @@ interface NumberFieldProps {
   disabled?: boolean
 }
 
+function clampToRange(value: number, min: number, max?: number): number {
+  const lower = Math.max(value, min)
+  return max === undefined ? lower : Math.min(lower, max)
+}
+
 export function NumberField({
   label,
   value,
@@ -40,7 +45,13 @@ export function NumberField({
       return
     }
     const parsed = Number(next)
-    if (!Number.isNaN(parsed)) onChange(parsed)
+    if (Number.isNaN(parsed)) return
+    // min and max are only advisory on an <input type="number">: typing or
+    // pasting walks straight past them. Ages feed the projection's loop
+    // bound, so an unbounded one here is a hung tab, not a silly figure.
+    // The draft above keeps showing what was typed, so clamping the value
+    // never fights the keyboard.
+    onChange(clampToRange(parsed, min, max))
   }
 
   return (

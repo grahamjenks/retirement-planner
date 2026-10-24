@@ -26,6 +26,19 @@ export function newId(): string {
 const num = (v: unknown, fallback: number) =>
   typeof v === 'number' && Number.isFinite(v) ? v : fallback
 
+/** Oldest age any field accepts. The projection runs a year at a time, so an
+ *  age read straight from a file is a loop bound — see MAX_PROJECTION_YEARS. */
+const MAX_AGE = 120
+
+const clamp = (v: number, low: number, high: number) => Math.min(high, Math.max(low, v))
+
+/** An age from untrusted input: finite, and inside a human lifetime. */
+const age = (v: unknown, fallback: number) => clamp(num(v, fallback), 0, MAX_AGE)
+
+/** A percentage rate from untrusted input, wide enough for any real plan but
+ *  not wide enough to overflow a compounding term. */
+const rate = (v: unknown, fallback: number) => clamp(num(v, fallback), -100, 1000)
+
 export function makePerson(overrides: Partial<Person> = {}): Person {
   return {
     id: newId(),
@@ -120,9 +133,9 @@ function coerceScheme(raw: unknown, index: number): DbScheme {
     id: typeof d.id === 'string' && d.id ? d.id : `scheme-${index}-${newId()}`,
     name: typeof d.name === 'string' && d.name ? d.name : `Scheme ${index + 1}`,
     accruedAnnualPension: num(d.accruedAnnualPension, base.accruedAnnualPension),
-    accrualRatePct: num(d.accrualRatePct, base.accrualRatePct),
+    accrualRatePct: rate(d.accrualRatePct, base.accrualRatePct),
     accruing: d.accruing !== false,
-    normalPensionAge: num(d.normalPensionAge, base.normalPensionAge),
+    normalPensionAge: age(d.normalPensionAge, base.normalPensionAge),
     followsStatePensionAge: d.followsStatePensionAge === true,
     lumpSum: num(d.lumpSum, base.lumpSum),
   }
@@ -234,20 +247,20 @@ function coercePerson(raw: unknown, index: number): Person {
     ...base,
     id: typeof p.id === 'string' && p.id ? p.id : `person-${index}-${newId()}`,
     name: typeof p.name === 'string' && p.name ? p.name : `Person ${index + 1}`,
-    currentAge: num(p.currentAge, base.currentAge),
-    retirementAge: num(p.retirementAge, base.retirementAge),
-    lifeExpectancy: num(p.lifeExpectancy, base.lifeExpectancy),
+    currentAge: age(p.currentAge, base.currentAge),
+    retirementAge: age(p.retirementAge, base.retirementAge),
+    lifeExpectancy: age(p.lifeExpectancy, base.lifeExpectancy),
     currentAnnualIncome: num(p.currentAnnualIncome, base.currentAnnualIncome),
     takeHomePay: num(p.takeHomePay, base.takeHomePay),
-    salaryGrowthRate: num(p.salaryGrowthRate, base.salaryGrowthRate),
-    statePensionAge: num(p.statePensionAge, base.statePensionAge),
+    salaryGrowthRate: rate(p.salaryGrowthRate, base.salaryGrowthRate),
+    statePensionAge: age(p.statePensionAge, base.statePensionAge),
     statePensionAnnual: num(p.statePensionAnnual, base.statePensionAnnual),
     pensionType: (p.pensionType === 'db' ? 'db' : 'dc') as PensionType,
     currentPensionPot: num(p.currentPensionPot, base.currentPensionPot),
-    employeePensionPct: num(p.employeePensionPct, base.employeePensionPct),
-    employerPensionPct: num(p.employerPensionPct, base.employerPensionPct),
-    pensionGrowthRate: num(p.pensionGrowthRate, base.pensionGrowthRate),
-    pensionAccessAge: num(p.pensionAccessAge, base.pensionAccessAge),
+    employeePensionPct: rate(p.employeePensionPct, base.employeePensionPct),
+    employerPensionPct: rate(p.employerPensionPct, base.employerPensionPct),
+    pensionGrowthRate: rate(p.pensionGrowthRate, base.pensionGrowthRate),
+    pensionAccessAge: age(p.pensionAccessAge, base.pensionAccessAge),
     dbSchemes: Array.isArray(p.dbSchemes)
       ? p.dbSchemes.map(coerceScheme)
       : legacySchemeFrom(raw),
@@ -267,7 +280,7 @@ function legacySchemeFrom(raw: unknown): DbScheme[] {
         accruedAnnualPension: accrued,
         accrualRatePct: rate || 2.3,
         accruing: true,
-        normalPensionAge: num(p.dbNormalPensionAge, 65),
+        normalPensionAge: age(p.dbNormalPensionAge, 65),
         lumpSum: num(p.dbLumpSum, 0),
       },
       0,
@@ -283,12 +296,12 @@ function coercePot(raw: unknown, index: number, ownerFallback: string): SavingsP
     name: typeof p.name === 'string' && p.name ? p.name : `Pot ${index + 1}`,
     balance: num(p.balance, base.balance),
     annualContribution: num(p.annualContribution, base.annualContribution),
-    growthRate: num(p.growthRate, base.growthRate),
-    accessibleFromAge: num(p.accessibleFromAge, base.accessibleFromAge),
+    growthRate: rate(p.growthRate, base.growthRate),
+    accessibleFromAge: age(p.accessibleFromAge, base.accessibleFromAge),
     accessAtRetirement: p.accessAtRetirement === true,
-    bonusRatePct: num(p.bonusRatePct, base.bonusRatePct),
+    bonusRatePct: rate(p.bonusRatePct, base.bonusRatePct),
     bonusCapAnnual: num(p.bonusCapAnnual, base.bonusCapAnnual),
-    contributionEndAge: num(p.contributionEndAge, base.contributionEndAge),
+    contributionEndAge: age(p.contributionEndAge, base.contributionEndAge),
     contributionEndsAtRetirement: p.contributionEndsAtRetirement === true,
     ownerId: typeof p.ownerId === 'string' && p.ownerId ? p.ownerId : ownerFallback,
   }
@@ -298,7 +311,7 @@ function coerceBand(raw: unknown, index: number): SpendingBand {
   const b = (raw ?? {}) as Partial<SpendingBand>
   return {
     id: typeof b.id === 'string' && b.id ? b.id : `band-${index}-${newId()}`,
-    fromAge: num(b.fromAge, 60),
+    fromAge: age(b.fromAge, 60),
     amount: num(b.amount, 0),
   }
 }
@@ -312,7 +325,7 @@ function coerceOneOff(raw: unknown, index: number, targetFallback: string): OneO
   return {
     id: typeof e.id === 'string' && e.id ? e.id : `oneoff-${index}-${newId()}`,
     name: typeof e.name === 'string' && e.name ? e.name : 'Inheritance',
-    atAge: num(e.atAge, 60),
+    atAge: age(e.atAge, 60),
     amount: num(e.amount, 0),
     targetId: target ?? targetFallback,
   }
@@ -549,9 +562,13 @@ export function saveAssumptions(a: Assumptions): void {
 
 export function clearAssumptions(): void {
   if (typeof window === 'undefined') return
-  window.localStorage.removeItem(STORAGE_KEY)
-  window.localStorage.removeItem(LEGACY_V2)
-  window.localStorage.removeItem(LEGACY_V1)
+  try {
+    window.localStorage.removeItem(STORAGE_KEY)
+    window.localStorage.removeItem(LEGACY_V2)
+    window.localStorage.removeItem(LEGACY_V1)
+  } catch {
+    // Storage unavailable — reset still clears what's on screen.
+  }
 }
 
 export function exportAssumptions(a: Assumptions): void {
@@ -567,9 +584,20 @@ export function exportAssumptions(a: Assumptions): void {
 }
 
 export async function importAssumptions(file: File): Promise<Assumptions> {
-  const parsed = JSON.parse(await file.text())
-  if (parsed && Array.isArray(parsed.people)) return coerceAssumptions(parsed)
-  if (parsed && Array.isArray(parsed.pots)) return migrateV2(parsed)
-  if (parsed && 'currentSavings' in parsed) return migrateV1(parsed)
-  return coerceAssumptions(parsed)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(await file.text())
+  } catch {
+    throw new Error("That file isn't JSON. Pick a backup exported from this planner.")
+  }
+  // Everything below reads properties, and `in` throws outright on a primitive.
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error("That file doesn't look like a saved plan. Pick a backup exported from this planner.")
+  }
+
+  const record = parsed as Record<string, unknown>
+  if (Array.isArray(record.people)) return coerceAssumptions(record)
+  if (Array.isArray(record.pots)) return migrateV2(record)
+  if ('currentSavings' in record) return migrateV1(record)
+  return coerceAssumptions(record)
 }
