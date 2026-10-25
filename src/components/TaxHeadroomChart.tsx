@@ -14,12 +14,15 @@ import {
 import { formatCurrency, formatCurrencyCompact } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { PENSION_COLORS } from './chartColors'
+import { CompareNote } from './CompareNote'
+import { ghostLine, rowsByYear, type ChartCompare } from './chartCompare'
 import { YearAgeTick } from './YearAxisTick'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 interface TaxHeadroomChartProps {
   assumptions: Assumptions
   rows: YearRow[]
+  compare?: ChartCompare | null
 }
 
 /**
@@ -27,7 +30,7 @@ interface TaxHeadroomChartProps {
  * the 40% threshold is the actionable number: it says how much more could be
  * drawn in a given year before the marginal rate doubles.
  */
-function TaxHeadroomChartBase({ assumptions: a, rows }: TaxHeadroomChartProps) {
+function TaxHeadroomChartBase({ assumptions: a, rows, compare }: TaxHeadroomChartProps) {
   const tickAges = useMemo(() => agesByYearFrom(rows), [rows])
   const t = a.tax
   // Bands are drawn at the untapered allowance; the taper only bites well above
@@ -36,11 +39,19 @@ function TaxHeadroomChartBase({ assumptions: a, rows }: TaxHeadroomChartProps) {
   const higherStart = pa + t.basicBandWidth
   const additionalStart = pa + t.basicBandWidth + t.higherBandWidth
 
+  const compareByYear = rowsByYear(compare)
+  const taxableOf = (py: { statePension: number; dbIncome: number; taxablePensionWithdrawal: number }) =>
+    py.statePension + py.dbIncome + py.taxablePensionWithdrawal
+
   const data = rows.map((r) => {
     const point: Record<string, number> = { year: r.year }
     r.people.forEach((py) => {
-      point[`taxable_${py.id}`] =
-        py.statePension + py.dbIncome + py.taxablePensionWithdrawal
+      point[`taxable_${py.id}`] = taxableOf(py)
+    })
+    // These are plain lines, so each person's comparison can shadow their own
+    // directly rather than going through a total.
+    compareByYear.get(r.year)?.people.forEach((py) => {
+      point[`c_taxable_${py.id}`] = taxableOf(py)
     })
     return point
   })
@@ -55,7 +66,8 @@ function TaxHeadroomChartBase({ assumptions: a, rows }: TaxHeadroomChartProps) {
   )
 
   return (
-    <div className="h-80 w-full">
+    <div className="w-full">
+      <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 18 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
@@ -129,8 +141,20 @@ function TaxHeadroomChartBase({ assumptions: a, rows }: TaxHeadroomChartProps) {
               dot={false}
             />
           ))}
+
+          {compare &&
+            a.people.map((person, i) => (
+              <Line
+                {...ghostLine}
+                key={`compare-${person.id}`}
+                dataKey={`c_taxable_${person.id}`}
+                stroke={PENSION_COLORS[i % PENSION_COLORS.length]}
+              />
+            ))}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
+      {compare && <CompareNote name={compare.name} of="the same people's taxable income" />}
     </div>
   )
 }

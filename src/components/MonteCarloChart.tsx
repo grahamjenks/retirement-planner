@@ -17,10 +17,14 @@ import { simulate } from '../lib/projection'
 import type { Assumptions } from '../lib/types'
 import { ALERT_COLOR } from './chartColors'
 import { YearAgeTick } from './YearAxisTick'
+import { CompareNote } from './CompareNote'
+import { ghostLine } from './chartCompare'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 interface MonteCarloChartProps {
   assumptions: Assumptions
+  /** Compared plans are re-run here too, so this takes assumptions. */
+  compare?: { name: string; assumptions: Assumptions } | null
 }
 
 const TRIAL_CHOICES = [200, 500, 1000] as const
@@ -33,7 +37,7 @@ const TRIAL_CHOICES = [200, 500, 1000] as const
  * crash at 85, because units are being sold to live on. The spread here is what
  * a single confident line cannot show.
  */
-function MonteCarloChartBase({ assumptions: a }: MonteCarloChartProps) {
+function MonteCarloChartBase({ assumptions: a, compare }: MonteCarloChartProps) {
   const [volatility, setVolatility] = useState(15)
   const [trials, setTrials] = useState<number>(500)
   const [seed, setSeed] = useState(42)
@@ -44,12 +48,28 @@ function MonteCarloChartBase({ assumptions: a }: MonteCarloChartProps) {
   )
   const baseline = useMemo(() => simulate(a), [a])
 
+  /*
+   * The comparison gets its own run at the same settings — same trials, same
+   * volatility, same seed — so the two medians differ because the plans do,
+   * not because the dice did. It is another few hundred simulations, which is
+   * why it only happens when a plan is actually being compared against.
+   */
+  const compareResult = useMemo(
+    () =>
+      compare
+        ? runMonteCarlo(compare.assumptions, { trials, volatilityPct: volatility, seed })
+        : null,
+    [compare, trials, volatility, seed],
+  )
+  const compareMedianByYear = new Map(compareResult?.bands.map((b) => [b.year, b.p50]) ?? [])
+
   const data = result.bands.map((b, i) => ({
     year: b.year,
     outer: [b.p10, b.p90] as [number, number],
     inner: [b.p25, b.p75] as [number, number],
     median: b.p50,
     planned: baseline[i]?.totalPot ?? 0,
+    c_median: compareMedianByYear.get(b.year),
   }))
 
   const success = result.successRate * 100
@@ -193,10 +213,15 @@ function MonteCarloChartBase({ assumptions: a }: MonteCarloChartProps) {
               strokeDasharray="5 4"
               dot={false}
             />
+            {/* Dotted: the steady-return plan above already owns the dash. */}
+            {compare && (
+              <Line {...ghostLine} dataKey="c_median" strokeDasharray="1 3" stroke="#2563eb" />
+            )}
             <ReferenceLine y={0} stroke={ALERT_COLOR} strokeWidth={1} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      {compare && <CompareNote name={compare.name} of="its typical run" dash="1 3" />}
 
       <p className="mt-2 text-xs text-slate-400">
         Returns are drawn at random each year around your assumed rates, so the average is unchanged

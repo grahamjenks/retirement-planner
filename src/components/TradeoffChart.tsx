@@ -14,9 +14,16 @@ import { retirementTradeoff } from '../lib/analysis'
 import { formatCurrency, formatCurrencyCompact } from '../lib/format'
 import type { Assumptions } from '../lib/types'
 import { ALERT_COLOR, PENSION_COLORS } from './chartColors'
+import { CompareNote } from './CompareNote'
+import { ghostLine } from './chartCompare'
 
 interface TradeoffChartProps {
   assumptions: Assumptions
+  /**
+   * This chart re-runs the plan itself rather than reading prepared rows, so
+   * the comparison arrives as assumptions and gets its own sweep.
+   */
+  compare?: { name: string; assumptions: Assumptions } | null
 }
 
 /**
@@ -24,25 +31,44 @@ interface TradeoffChartProps {
  * number; this is the curve behind it, so you can see whether retiring a year
  * earlier costs a little or a lot.
  */
-function TradeoffChartBase({ assumptions: a }: TradeoffChartProps) {
+function TradeoffChartBase({ assumptions: a, compare }: TradeoffChartProps) {
   const [personId, setPersonId] = useState(a.people[0]?.id ?? '')
   const person = a.people.find((p) => p.id === personId) ?? a.people[0]
   const points = useMemo(
     () => (person ? retirementTradeoff(a, person.id) : []),
     [a, person],
   )
+  // Matched by id, which a duplicated plan keeps, then by name for a plan
+  // that came from somewhere else.
+  const comparePerson = compare
+    ? (compare.assumptions.people.find((p) => p.id === personId) ??
+      compare.assumptions.people.find((p) => p.name === person?.name))
+    : undefined
+  const comparePoints = useMemo(
+    () =>
+      compare && comparePerson ? retirementTradeoff(compare.assumptions, comparePerson.id) : [],
+    [compare, comparePerson],
+  )
 
   if (!person || points.length === 0) return null
 
+  const compareByAge = new Map(comparePoints.map((p) => [p.retirementAge, p]))
+
   const firstSustainable = points.find((p) => p.sustainable)
-  const data = points.map((p) => ({
-    age: p.retirementAge,
-    // A plan that never runs dry is plotted at life expectancy, the top of the
-    // chart, so "lasts for life" reads as success rather than a missing point.
-    runsDry: p.runsDryAge ?? person.lifeExpectancy,
-    left: p.finalPot,
-    sustainable: p.sustainable,
-  }))
+  const data = points.map((p) => {
+    const other = compareByAge.get(p.retirementAge)
+    return {
+      age: p.retirementAge,
+      // A plan that never runs dry is plotted at life expectancy, the top of
+      // the chart, so "lasts for life" reads as success rather than a missing
+      // point.
+      runsDry: p.runsDryAge ?? person.lifeExpectancy,
+      left: p.finalPot,
+      sustainable: p.sustainable,
+      c_runsDry: other ? (other.runsDryAge ?? comparePerson?.lifeExpectancy) : undefined,
+      c_left: other?.finalPot,
+    }
+  })
 
   return (
     <div>
@@ -150,6 +176,29 @@ function TradeoffChartBase({ assumptions: a }: TradeoffChartProps) {
                 fill: PENSION_COLORS[0],
               }}
             />
+            {/*
+              This chart sweeps *over* retirement age, so two plans that differ
+              only in when someone stops work draw the same curve — what moves
+              is the marker. That makes the compared plan's own age the useful
+              overlay here, alongside the curves for everything else.
+            */}
+            {compare && comparePerson && comparePerson.retirementAge !== person.retirementAge && (
+              <ReferenceLine
+                yAxisId="age"
+                x={comparePerson.retirementAge}
+                stroke={PENSION_COLORS[0]}
+                strokeOpacity={0.55}
+                strokeDasharray="1 3"
+                label={{
+                  value: compare.name,
+                  position: 'top',
+                  fontSize: 11,
+                  fill: PENSION_COLORS[0],
+                  opacity: 0.8,
+                }}
+              />
+            )}
+
             <Line
               yAxisId="age"
               type="monotone"
@@ -169,9 +218,35 @@ function TradeoffChartBase({ assumptions: a }: TradeoffChartProps) {
               strokeDasharray="4 3"
               dot={false}
             />
+
+            {/*
+              Dotted rather than dashed here: "Left at end of plan" is already
+              a dashed series, so the usual overlay dash would say two things.
+            */}
+            {compare && (
+              <Line
+                {...ghostLine}
+                yAxisId="age"
+                dataKey="c_runsDry"
+                strokeDasharray="1 3"
+                stroke={ALERT_COLOR}
+              />
+            )}
+            {compare && (
+              <Line
+                {...ghostLine}
+                yAxisId="money"
+                dataKey="c_left"
+                strokeDasharray="1 3"
+                stroke="#0d9488"
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      {compare && comparePerson && (
+        <CompareNote name={compare.name} of="its own retirement age, and the same two curves" dash="1 3" />
+      )}
     </div>
   )
 }
