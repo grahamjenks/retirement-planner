@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 
 interface PanelProps {
+  /** Anchor, so a hero figure can scroll to whatever explains it. */
+  id?: string
   /** Omit when the child renders its own heading. */
   title?: string
   description?: ReactNode
@@ -14,9 +16,12 @@ interface PanelProps {
  * its heading on one sheet; the print stylesheet looks for that class rather
  * than a structural selector, so panels can be nested freely.
  */
-export function Panel({ title, description, action, children }: PanelProps) {
+export function Panel({ id, title, description, action, children }: PanelProps) {
   return (
-    <section className="print-block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <section
+      id={id}
+      className="print-block scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+    >
       {(title || action) && (
         <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
           {title && (

@@ -15,7 +15,9 @@ import { PotsEditor } from './components/PotsEditor'
 import { PrintHeader } from './components/PrintHeader'
 import { ResultTabs } from './components/ResultTabs'
 import { RetirementAgeBar } from './components/RetirementAgeBar'
+import { ScenarioBar } from './components/ScenarioBar'
 import { SegmentedToggle } from './components/SegmentedToggle'
+import { moneyDelta, runsDryDelta, yearsDelta } from './components/statDelta'
 import { SliderField } from './components/SliderField'
 import { SpendingSchedule } from './components/SpendingSchedule'
 import { SpendingSummary } from './components/SpendingSummary'
@@ -41,33 +43,15 @@ import {
   worstShortfallRow,
 } from './lib/projection'
 import {
-  clearAssumptions,
-  defaultAssumptions,
-  exportAssumptions,
-  importAssumptions,
-  loadAssumptions,
-  saveAssumptions,
-} from './lib/storage'
+  MAX_SCENARIOS,
+  clearStore,
+  defaultScenarioStore,
+  exportStore,
+  importStore,
+  type ScenarioStore,
+} from './lib/scenarios'
 import type { Assumptions } from './lib/types'
-
-function useAssumptions() {
-  const [assumptions, setAssumptions] = useState<Assumptions>(() => loadAssumptions())
-
-  function update<K extends keyof Assumptions>(key: K, value: Assumptions[K]) {
-    setAssumptions((prev) => {
-      const next = { ...prev, [key]: value }
-      saveAssumptions(next)
-      return next
-    })
-  }
-
-  function replaceAll(next: Assumptions) {
-    setAssumptions(next)
-    saveAssumptions(next)
-  }
-
-  return { assumptions, update, replaceAll }
-}
+import { useScenarioStore } from './useScenarioStore'
 
 const verdictPill = {
   good: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-900',
@@ -101,9 +85,11 @@ function StrategyBadge({ strategy }: { strategy: Assumptions['drawdownStrategy']
 }
 
 function App() {
-  const { assumptions: a, update, replaceAll } = useAssumptions()
+  const plans = useScenarioStore()
+  const { update, replaceAssumptions: replaceAll } = plans
+  const a = plans.active.assumptions
   const [importError, setImportError] = useState<string | null>(null)
-  const [undoReset, setUndoReset] = useState<Assumptions | null>(null)
+  const [undoReset, setUndoReset] = useState<ScenarioStore | null>(null)
   const [chartMode, setChartMode] = useState<WealthChartMode>('stacked')
   const [showInputs, setShowInputs] = useState(true)
   const [tab, setTab] = useState<TabId>('overview')
@@ -147,6 +133,61 @@ function App() {
   const potAtRetirement = retirementRow?.totalPot ?? 0
   const lockedAtRetirement = retirementRow?.lockedBalance ?? 0
 
+  /*
+   * The scenario being compared against gets its own projection. It costs
+   * another simulate plus a retirement search per person, so it rides the
+   * same deferred value as everything else and only runs when one is picked.
+   */
+  const comparePlan = plans.compare
+  const deferredCompare = useDeferredValue(comparePlan?.assumptions ?? null)
+  const compareView = useMemo(() => {
+    if (!deferredCompare) return null
+    const compareRows = simulate(deferredCompare)
+    const compareShortfall = firstShortfallRow(compareRows)
+    const compareExhausted = potsExhaustedRow(compareRows)
+    const earliest = deferredCompare.people.map(
+      (person) => [person, findEarliestRetirementAge(deferredCompare, person.id).earliestAge] as const,
+    )
+    return {
+      rows: compareRows,
+      shortfallTotal: compareShortfall ? shortfallSummary(deferredCompare, compareRows).total : 0,
+      exhaustedAge: compareExhausted ? compareExhausted.people[0].age : null,
+      earliestById: new Map(earliest.map(([person, age]) => [person.id, age])),
+      earliestByName: new Map(earliest.map(([person, age]) => [person.name, age])),
+    }
+  }, [deferredCompare])
+
+  /*
+   * Duplicating a plan keeps the person ids, so that is the reliable match.
+   * An unrelated plan imported from a backup will not share them, so fall
+   * back to the name before giving up — `undefined` means "no counterpart",
+   * which is different from "counterpart that can never retire".
+   */
+  function comparePersonAge(person: { id: string; name: string }): number | null | undefined {
+    if (!compareView) return undefined
+    if (compareView.earliestById.has(person.id)) {
+      return compareView.earliestById.get(person.id) ?? null
+    }
+    if (compareView.earliestByName.has(person.name)) {
+      return compareView.earliestByName.get(person.name) ?? null
+    }
+    return undefined
+  }
+
+  const shortfallTotal = shortfall ? shortfallTotals.total : 0
+  const exhaustedAge = exhausted ? exhausted.people[0].age : null
+
+  /** Switches to the tab holding a panel and scrolls to it. */
+  function showEvidence(target: TabId, panelId: string) {
+    setTab(target)
+    // The panel is not in the document until the tab change has committed.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document.getElementById(panelId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      ),
+    )
+  }
+
   const guaranteedInRetirement = useMemo(() => {
     // Guaranteed income once every pension is in payment.
     const last = rows[rows.length - 1]
@@ -182,6 +223,23 @@ function App() {
         } as const)
 
   /*
+   * What the charts overlay. `rows` for the ones handed prepared projections,
+   * `assumptions` for the two that re-run the plan themselves. Null whenever
+   * nothing is being compared, which is what keeps the extra work off the
+   * page for everyone not using the feature.
+   */
+  const chartCompare = useMemo(
+    () =>
+      comparePlan && compareView && deferredCompare
+        ? {
+            byRows: { name: comparePlan.name, rows: compareView.rows },
+            byAssumptions: { name: comparePlan.name, assumptions: deferredCompare },
+          }
+        : null,
+    [comparePlan, compareView, deferredCompare],
+  )
+
+  /*
    * Element trees, not rendered output — only the panels the active tab (or a
    * print) actually mounts cost anything. Grouping them this way is what keeps
    * the page from being ten charts deep before you reach the one you wanted.
@@ -192,6 +250,7 @@ function App() {
         <SpendingSummary assumptions={deferred} rows={rows} />
 
         <Panel
+          id="evidence-wealth"
           title="Wealth over time"
           action={
             <SegmentedToggle
@@ -215,10 +274,12 @@ function App() {
             drawdownYear={drawdownRow?.year ?? null}
             unlocks={unlocks}
             mode={chartMode}
+            compare={chartCompare?.byRows}
           />
         </Panel>
 
         <Panel
+          id="evidence-income"
           title="Income vs outgoings"
           description={
             <>
@@ -233,6 +294,7 @@ function App() {
             assumptions={deferred}
             rows={rows}
             drawdownYear={drawdownRow?.year ?? null}
+            compare={chartCompare?.byRows}
           />
         </Panel>
 
@@ -240,18 +302,18 @@ function App() {
           title="Contributions by pot"
           description="What goes into savings each year, split by destination. Pot colours match the other charts, and the stack steps down as each person stops working. LISA figures include the government bonus."
         >
-          <ContributionsChart assumptions={deferred} rows={rows} />
+          <ContributionsChart assumptions={deferred} rows={rows} compare={chartCompare?.byRows} />
         </Panel>
       </>
     ),
     risk: (
       <>
-        <Panel>
-          <TradeoffChart assumptions={deferred} />
+        <Panel id="evidence-tradeoff">
+          <TradeoffChart assumptions={deferred} compare={chartCompare?.byAssumptions} />
         </Panel>
 
         <Panel>
-          <MonteCarloChart assumptions={deferred} />
+          <MonteCarloChart assumptions={deferred} compare={chartCompare?.byAssumptions} />
         </Panel>
 
         <Panel title="What the plan hangs on">
@@ -268,7 +330,7 @@ function App() {
             </>
           }
         >
-          <TaxHeadroomChart assumptions={deferred} rows={rows} />
+          <TaxHeadroomChart assumptions={deferred} rows={rows} compare={chartCompare?.byRows} />
         </Panel>
       </>
     ),
@@ -311,26 +373,30 @@ function App() {
   }
 
   function handleReset() {
-    if (!confirm('Reset all inputs to the default example and erase your saved data on this device?'))
+    if (
+      !confirm(
+        'Reset to the default example and erase every saved plan on this device?',
+      )
+    )
       return
     // Reset wipes this device's only copy, so keep the previous plan in memory
     // and offer it back — the mistake is easy to make and was unrecoverable.
-    const previous = a
-    clearAssumptions()
-    replaceAll(defaultAssumptions)
+    const previous = plans.store
+    clearStore()
+    plans.replaceStore(defaultScenarioStore())
     setUndoReset(() => previous)
   }
 
   function undoLastReset() {
     if (!undoReset) return
-    replaceAll(undoReset)
+    plans.replaceStore(undoReset)
     setUndoReset(null)
   }
 
   async function handleImportFile(file: File) {
     setImportError(null)
     try {
-      replaceAll(await importAssumptions(file))
+      plans.replaceStore(await importStore(file))
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Could not read that file.')
     }
@@ -347,6 +413,26 @@ function App() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span className="flex overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600">
+              <button
+                type="button"
+                onClick={plans.undo}
+                disabled={!plans.canUndo}
+                title="Undo the last change (Ctrl/Cmd + Z)"
+                className="px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                ↶ Undo
+              </button>
+              <button
+                type="button"
+                onClick={plans.redo}
+                disabled={!plans.canRedo}
+                title="Redo (Ctrl/Cmd + Shift + Z)"
+                className="border-l border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                ↷ Redo
+              </button>
+            </span>
             <button
               type="button"
               onClick={() => setShowInputs((v) => !v)}
@@ -364,7 +450,7 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => exportAssumptions(a)}
+              onClick={() => exportStore(plans.store)}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               Export backup
@@ -395,6 +481,21 @@ function App() {
               Reset
             </button>
           </div>
+        </div>
+        <div className="mx-auto max-w-[1800px]">
+          <ScenarioBar
+            scenarios={plans.store.scenarios}
+            activeId={plans.store.activeId}
+            compareId={plans.store.compareId}
+            canAdd={plans.store.scenarios.length < MAX_SCENARIOS}
+            onSwitch={plans.switchTo}
+            onCompare={plans.compareWith}
+            onRename={plans.rename}
+            onDuplicate={plans.duplicate}
+            onDelete={() => {
+              if (confirm(`Delete "${plans.active.name}"? Undo will bring it back.`)) plans.remove()
+            }}
+          />
         </div>
         {importError && (
           <div className="mx-auto max-w-[1800px] px-4 pb-3">
@@ -724,12 +825,26 @@ function App() {
                     .filter((p) => p.id !== person.id)
                     .map((p) => `${p.name} at ${p.retirementAge}`)
                     .join(' and ')
+                  const theirs = comparePersonAge(person)
                   return (
                     <HeroStat
                       key={person.id}
                       label={`Earliest retirement — ${person.name}`}
                       value={earliestAge ?? `${searchedUpTo}+`}
                       tone={earliestAge ? 'good' : 'bad'}
+                      track={earliestAge}
+                      describeChange={(from, to) => yearsDelta(from, to, 'lower')}
+                      compare={
+                        comparePlan && theirs !== undefined
+                          ? {
+                              name: comparePlan.name,
+                              value: theirs ?? `${searchedUpTo}+`,
+                              delta: yearsDelta(theirs, earliestAge, 'lower'),
+                            }
+                          : undefined
+                      }
+                      onClick={() => showEvidence('risk', 'evidence-tradeoff')}
+                      linkTitle="Show what retiring earlier costs"
                       sub={
                         earliestAge
                           ? others
@@ -744,6 +859,22 @@ function App() {
                   label="Total shortfall"
                   value={shortfall ? formatCurrency(shortfallTotals.total) : 'None'}
                   tone={shortfall ? 'bad' : 'good'}
+                  track={shortfallTotal}
+                  describeChange={(from, to) => moneyDelta(from ?? 0, to ?? 0, 'lower')}
+                  compare={
+                    comparePlan && compareView
+                      ? {
+                          name: comparePlan.name,
+                          value:
+                            compareView.shortfallTotal > 0
+                              ? formatCurrency(compareView.shortfallTotal)
+                              : 'None',
+                          delta: moneyDelta(compareView.shortfallTotal, shortfallTotal, 'lower'),
+                        }
+                      : undefined
+                  }
+                  onClick={() => showEvidence('overview', 'evidence-income')}
+                  linkTitle="Show the years income falls short"
                   sub={
                     shortfall ? (
                       <>
@@ -765,6 +896,19 @@ function App() {
                   value={exhausted ? exhausted.people[0].age : 'Never'}
                   unit={exhausted ? 'years old' : undefined}
                   tone={exhausted ? 'warn' : 'good'}
+                  track={exhaustedAge}
+                  describeChange={runsDryDelta}
+                  compare={
+                    comparePlan && compareView
+                      ? {
+                          name: comparePlan.name,
+                          value: compareView.exhaustedAge ?? 'Never',
+                          delta: runsDryDelta(compareView.exhaustedAge, exhaustedAge),
+                        }
+                      : undefined
+                  }
+                  onClick={() => showEvidence('overview', 'evidence-wealth')}
+                  linkTitle="Show the pots draining over time"
                   sub={
                     exhausted
                       ? `${exhausted.year} — ${exhausted.people

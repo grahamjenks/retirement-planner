@@ -15,6 +15,8 @@ import {
 import { formatCurrencyCompact } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { ALERT_COLOR, PENSION_COLORS, POT_COLORS } from './chartColors'
+import { CompareNote } from './CompareNote'
+import { COMPARE_INK, ghostLine, rowsByYear, type ChartCompare } from './chartCompare'
 import { WealthTooltip } from './WealthTooltip'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import { YearAgeTick } from './YearAxisTick'
@@ -29,6 +31,7 @@ interface WealthChartProps {
   drawdownYear: number | null
   unlocks: { t: number; label: string }[]
   mode: WealthChartMode
+  compare?: ChartCompare | null
 }
 
 function baseYearOf(rows: { year: number }[]): number {
@@ -42,6 +45,7 @@ function WealthChartBase({
   drawdownYear,
   unlocks,
   mode,
+  compare,
 }: WealthChartProps) {
   const lastYear = rows.length > 0 ? rows[rows.length - 1].year : 0
   const baseYear = rows.length > 0 ? rows[0].year : 0
@@ -55,6 +59,8 @@ function WealthChartBase({
     a.people.map((p) => baseYearOf(rows) + (p.retirementAge - p.currentAge)),
   )
 
+  const compareByYear = rowsByYear(compare)
+
   const data = rows.map((r) => {
     const point: Record<string, number> = { year: r.year }
     dcPeople.forEach((person) => {
@@ -64,6 +70,25 @@ function WealthChartBase({
     a.pots.forEach((_pot, i) => {
       point[`pot_${i}`] = r.potBalances[i] ?? 0
     })
+    const other = compareByYear.get(r.year)
+    if (other) {
+      let total = 0
+      dcPeople.forEach((person) => {
+        const py = other.people.find((x) => x.id === person.id)
+        if (py) {
+          point[`c_pension_${person.id}`] = py.pensionPot
+          total += py.pensionPot
+        }
+      })
+      a.pots.forEach((_pot, i) => {
+        const balance = other.potBalances[i]
+        if (balance !== undefined) {
+          point[`c_pot_${i}`] = balance
+          total += balance
+        }
+      })
+      point.c_total = total
+    }
     return point
   })
 
@@ -81,127 +106,159 @@ function WealthChartBase({
   ]
 
   return (
-    <div className="h-80 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 34, right: 16, left: 0, bottom: 18 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
-          {drawdownYear !== null && (
-            <ReferenceArea
-              x1={drawdownYear}
-              x2={lastYear}
-              fill={ALERT_COLOR}
-              fillOpacity={0.06}
+    <div className="w-full">
+      <div className="h-80 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 34, right: 16, left: 0, bottom: 18 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
+            {drawdownYear !== null && (
+              <ReferenceArea
+                x1={drawdownYear}
+                x2={lastYear}
+                fill={ALERT_COLOR}
+                fillOpacity={0.06}
+                label={{
+                  value: 'Drawdown phase',
+                  position: 'insideTopRight',
+                  fontSize: 11,
+                  fill: ALERT_COLOR,
+                }}
+              />
+            )}
+            <XAxis
+              dataKey="year"
+              tick={<YearAgeTick agesByYear={tickAges} />}
+              height={58}
+              interval="preserveStartEnd"
+              minTickGap={24}
               label={{
-                value: 'Drawdown phase',
-                position: 'insideTopRight',
+                value: yearAxisLabel(rows),
+                position: 'insideBottom',
+                offset: 2,
                 fontSize: 11,
-                fill: ALERT_COLOR,
               }}
             />
-          )}
-          <XAxis
-            dataKey="year"
-            tick={<YearAgeTick agesByYear={tickAges} />}
-            height={58}
-            interval="preserveStartEnd"
-            minTickGap={24}
-            label={{
-              value: yearAxisLabel(rows),
-              position: 'insideBottom',
-              offset: 2,
-              fontSize: 11,
-            }}
-          />
-          <YAxis
-            tickFormatter={(v) => formatCurrencyCompact(v)}
-            tick={{ fontSize: 12 }}
-            width={64}
-          />
-          <Tooltip content={<WealthTooltip assumptions={a} rows={rows} />} />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
+            <YAxis
+              tickFormatter={(v) => formatCurrencyCompact(v)}
+              tick={{ fontSize: 12 }}
+              width={64}
+            />
+            <Tooltip content={<WealthTooltip assumptions={a} rows={rows} />} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
 
-          {mode === 'stacked'
-            ? series.map((s) => (
-                <Area
-                  key={s.key}
-                  type="monotone"
-                  dataKey={s.key}
-                  name={s.name}
-                  stackId="1"
-                  stroke={s.color}
-                  fill={s.color}
-                  fillOpacity={0.55}
-                />
-              ))
-            : series.map((s) => (
-                <Line
-                  key={s.key}
-                  type="monotone"
-                  dataKey={s.key}
-                  name={s.name}
-                  stroke={s.color}
-                  strokeWidth={2}
-                  dot={false}
-                />
+            {mode === 'stacked'
+              ? series.map((s) => (
+                  <Area
+                    key={s.key}
+                    type="monotone"
+                    dataKey={s.key}
+                    name={s.name}
+                    stackId="1"
+                    stroke={s.color}
+                    fill={s.color}
+                    fillOpacity={0.55}
+                  />
+                ))
+              : series.map((s) => (
+                  <Line
+                    key={s.key}
+                    type="monotone"
+                    dataKey={s.key}
+                    name={s.name}
+                    stroke={s.color}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                ))}
+
+            {/*
+              Stacked, each band sits at its cumulative height, so a ghost of
+              one band at its own value would line up with nothing. The honest
+              overlay there is the total — the top edge of the stack. Compared
+              pot by pot, each series can shadow its own line directly.
+            */}
+            {compare &&
+              (mode === 'stacked' ? (
+                <Line {...ghostLine} dataKey="c_total" stroke={COMPARE_INK} />
+              ) : (
+                series.map((s) => (
+                  <Line
+                    {...ghostLine}
+                    key={`compare-${s.key}`}
+                    dataKey={`c_${s.key}`}
+                    stroke={s.color}
+                  />
+                ))
               ))}
 
-          {unlocks.map((u, ui) => (
-            <ReferenceLine
-              key={`${u.label}-${u.t}`}
-              x={baseYear + u.t}
-              stroke="#94a3b8"
-              strokeDasharray="2 4"
-              label={{
-                value: `🔓 ${u.label}`,
-                position: 'insideBottomLeft',
-                dy: -unlockRows[ui] * LABEL_ROW_HEIGHT,
-                fontSize: 10,
-                fill: '#94a3b8',
-              }}
-            />
-          ))}
-          {a.people.map((person, i) => (
-            <ReferenceLine
-              key={`retire-${person.id}`}
-              x={baseYear + (person.retirementAge - person.currentAge)}
-              stroke="#64748b"
-              strokeDasharray="4 4"
-              label={{
-                value: `${person.name} retires`,
-                position: 'top',
-                dy: retireRows[i] * LABEL_ROW_HEIGHT,
-                fontSize: 11,
-                fill: '#64748b',
-              }}
-            />
-          ))}
-          {drawdownYear !== null && (
-            <ReferenceLine
-              x={drawdownYear}
-              stroke={ALERT_COLOR}
-              strokeWidth={2}
-              label={
-                retirementYears.has(drawdownYear)
-                  ? undefined
-                  : {
-                      value: 'Drawdown starts',
-                      position: 'top',
-                      fontSize: 11,
-                      fill: ALERT_COLOR,
-                    }
-              }
-            />
-          )}
-          {shortfallYear && (
-            <ReferenceLine
-              x={shortfallYear}
-              stroke={ALERT_COLOR}
-              strokeDasharray="4 4"
-              label={{ value: 'Shortfall', position: 'top', fontSize: 12, fill: ALERT_COLOR }}
-            />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
+            {unlocks.map((u, ui) => (
+              <ReferenceLine
+                key={`${u.label}-${u.t}`}
+                x={baseYear + u.t}
+                stroke="#94a3b8"
+                strokeDasharray="2 4"
+                label={{
+                  value: `🔓 ${u.label}`,
+                  position: 'insideBottomLeft',
+                  dy: -unlockRows[ui] * LABEL_ROW_HEIGHT,
+                  fontSize: 10,
+                  fill: '#94a3b8',
+                }}
+              />
+            ))}
+            {a.people.map((person, i) => (
+              <ReferenceLine
+                key={`retire-${person.id}`}
+                x={baseYear + (person.retirementAge - person.currentAge)}
+                stroke="#64748b"
+                strokeDasharray="4 4"
+                label={{
+                  value: `${person.name} retires`,
+                  position: 'top',
+                  dy: retireRows[i] * LABEL_ROW_HEIGHT,
+                  fontSize: 11,
+                  fill: '#64748b',
+                }}
+              />
+            ))}
+            {drawdownYear !== null && (
+              <ReferenceLine
+                x={drawdownYear}
+                stroke={ALERT_COLOR}
+                strokeWidth={2}
+                label={
+                  retirementYears.has(drawdownYear)
+                    ? undefined
+                    : {
+                        value: 'Drawdown starts',
+                        position: 'top',
+                        fontSize: 11,
+                        fill: ALERT_COLOR,
+                      }
+                }
+              />
+            )}
+            {shortfallYear && (
+              <ReferenceLine
+                x={shortfallYear}
+                stroke={ALERT_COLOR}
+                strokeDasharray="4 4"
+                label={{ value: 'Shortfall', position: 'top', fontSize: 12, fill: ALERT_COLOR }}
+              />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      {compare && (
+        <CompareNote
+          name={compare.name}
+          of={
+            mode === 'stacked'
+              ? 'its total, against the top of the stack'
+              : 'the same pots and pensions'
+          }
+        />
+      )}
     </div>
   )
 }

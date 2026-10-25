@@ -22,6 +22,8 @@ import {
   POT_COLORS,
   STATE_PENSION_COLOR,
 } from './chartColors'
+import { CompareNote } from './CompareNote'
+import { COMPARE_INK, ghostLine, rowsByYear, type ChartCompare } from './chartCompare'
 import { IncomeTooltip } from './IncomeTooltip'
 import { YearAgeTick } from './YearAxisTick'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
@@ -30,15 +32,18 @@ interface IncomeChartProps {
   assumptions: Assumptions
   rows: YearRow[]
   drawdownYear: number | null
+  compare?: ChartCompare | null
 }
 
-function IncomeChartBase({ assumptions: a, rows, drawdownYear }: IncomeChartProps) {
+function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: IncomeChartProps) {
   const lastYear = rows.length > 0 ? rows[rows.length - 1].year : 0
   const baseYear = rows.length > 0 ? rows[0].year : 0
   const retireRows = labelRows(a.people.map((p) => p.retirementAge - p.currentAge))
   const hasDb = a.people.some((p) => p.pensionType === 'db')
   const dcPeople = a.people.filter((p) => p.pensionType === 'dc')
   const tickAges = useMemo(() => agesByYearFrom(rows), [rows])
+
+  const compareByYear = rowsByYear(compare)
 
   const data = rows.map((r) => {
     const point: Record<string, number> = {
@@ -58,6 +63,20 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear }: IncomeChartProp
     a.pots.forEach((_pot, i) => {
       point[`draw_pot_${i}`] = r.potWithdrawals[i] ?? 0
     })
+    // Income is a stack, so the comparison can only be drawn as its total —
+    // the top of the bar. Outgoings is already a line, so that one shadows
+    // directly, and the gap between the two dashed lines is the other plan's
+    // shortfall at a glance.
+    const other = compareByYear.get(r.year)
+    if (other) {
+      point.c_outgoings = other.outgoings
+      point.c_income =
+        other.dbIncomeTotal +
+        other.statePensionTotal +
+        other.shortfall +
+        other.people.reduce((sum, py) => sum + py.takeHome + py.pensionWithdrawal, 0) +
+        other.potWithdrawals.reduce((sum, w) => sum + w, 0)
+    }
     return point
   })
 
@@ -65,7 +84,8 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear }: IncomeChartProp
   const salaryShades = ['#94a3b8', '#cbd5e1']
 
   return (
-    <div className="h-80 w-full">
+    <div className="w-full">
+      <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 34, right: 16, left: 0, bottom: 18 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
@@ -149,6 +169,9 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear }: IncomeChartProp
             strokeWidth={2}
             dot={false}
           />
+          {compare && <Line {...ghostLine} dataKey="c_income" stroke={COMPARE_INK} />}
+          {compare && <Line {...ghostLine} dataKey="c_outgoings" stroke={ALERT_COLOR} />}
+
           {a.people.map((person, i) => (
             <ReferenceLine
               key={person.id}
@@ -166,6 +189,10 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear }: IncomeChartProp
           ))}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
+      {compare && (
+        <CompareNote name={compare.name} of="its total income and its outgoings" />
+      )}
     </div>
   )
 }

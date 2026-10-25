@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Legend,
+  Line,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -15,11 +16,14 @@ import type { Assumptions, YearRow } from '../lib/types'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import { PENSION_COLORS, POT_COLORS } from './chartColors'
 import { YearAgeTick } from './YearAxisTick'
+import { CompareNote } from './CompareNote'
+import { COMPARE_INK, ghostLine, rowsByYear, type ChartCompare } from './chartCompare'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
 interface ContributionsChartProps {
   assumptions: Assumptions
   rows: YearRow[]
+  compare?: ChartCompare | null
 }
 
 /**
@@ -27,7 +31,7 @@ interface ContributionsChartProps {
  * income chart. Contributions stop at each person's retirement, so the stack
  * steps down as they finish work.
  */
-function ContributionsChartBase({ assumptions: a, rows }: ContributionsChartProps) {
+function ContributionsChartBase({ assumptions: a, rows, compare }: ContributionsChartProps) {
   const baseYear = rows.length > 0 ? rows[0].year : 0
   const retireRows = labelRows(a.people.map((p) => p.retirementAge - p.currentAge))
   const dcPeople = a.people.filter((p) => p.pensionType === 'dc')
@@ -54,6 +58,8 @@ function ContributionsChartBase({ assumptions: a, rows }: ContributionsChartProp
     lastRetirementYear !== undefined &&
     contributionsEndYear < lastRetirementYear - 1
 
+  const compareByYear = rowsByYear(compare)
+
   const data = visible.map((r) => {
     const point: Record<string, number> = { year: r.year }
     dcPeople.forEach((person) => {
@@ -63,6 +69,9 @@ function ContributionsChartBase({ assumptions: a, rows }: ContributionsChartProp
     a.pots.forEach((_pot, i) => {
       point[`pot_${i}`] = r.potContributions[i] ?? 0
     })
+    // Stacked bars, so the comparison is its total — the top of the bar.
+    const other = compareByYear.get(r.year)
+    if (other) point.c_total = totalIn(other)
     return point
   })
 
@@ -111,6 +120,7 @@ function ContributionsChartBase({ assumptions: a, rows }: ContributionsChartProp
             }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
+          {compare && <Line {...ghostLine} dataKey="c_total" stroke={COMPARE_INK} />}
 
           {dcPeople.map((person, i) => (
             <Bar
@@ -153,6 +163,7 @@ function ContributionsChartBase({ assumptions: a, rows }: ContributionsChartProp
         </ComposedChart>
       </ResponsiveContainer>
       </div>
+      {compare && <CompareNote name={compare.name} of="what it puts away each year in total" />}
     </div>
   )
 }
