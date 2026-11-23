@@ -39,7 +39,7 @@ const MAX_PROPERTIES = 20
 const MAX_SPENDING_CHANGES = 50
 const MAX_ONE_OFF_EVENTS = 50
 const MAX_DB_SCHEMES = 10
-const MAX_CONTRIBUTION_STEPS = 20
+export const MAX_CONTRIBUTION_STEPS = 20
 const MAX_NAME = 60
 
 /** A name from untrusted input: a string, non-empty, and a sane length. */

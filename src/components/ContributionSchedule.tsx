@@ -1,27 +1,41 @@
+import { useState } from 'react'
 import { formatCurrency } from '../lib/format'
+import { contributionYears, toggleContributionYear } from '../lib/contributionSchedule'
 import { newId } from '../lib/storage'
-import type { ContributionStep } from '../lib/types'
+import type { ContributionStep, SavingsPot } from '../lib/types'
 import { NumberField } from './NumberField'
 
 interface ContributionScheduleProps {
+  pot: SavingsPot
   /** What goes in before the first step. */
   baseAmount: number
   ownerName: string
   currentAge: number
   /** Where contributions stop for good, whatever the schedule says. */
   endAge: number
+  retirementAge: number
   steps: ContributionStep[]
   onChange: (steps: ContributionStep[]) => void
 }
 
 export function ContributionSchedule({
+  pot,
   baseAmount,
   ownerName,
   currentAge,
   endAge,
+  retirementAge,
   steps,
   onChange,
 }: ContributionScheduleProps) {
+  const [refused, setRefused] = useState<string | null>(null)
+  const years = contributionYears(pot, currentAge, endAge, retirementAge)
+
+  function toggleYear(age: number) {
+    const result = toggleContributionYear(years, age, baseAmount, steps)
+    setRefused(result.refused ?? null)
+    if (!result.refused) onChange(result.steps)
+  }
   const byAge = (x: ContributionStep, y: ContributionStep) => x.fromAge - y.fromAge
   /*
    * Rows keep the order they are stored in while you are editing them.
@@ -52,7 +66,47 @@ export function ContributionSchedule({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {years.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+            Years you pay in
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {years.map((year) => (
+              <button
+                key={year.age}
+                type="button"
+                role="switch"
+                aria-checked={year.paying}
+                onClick={() => toggleYear(year.age)}
+                title={
+                  year.paying
+                    ? `Age ${year.age}: ${formatCurrency(year.amount)} — click to skip this year`
+                    : `Age ${year.age}: nothing — click to pay in`
+                }
+                className={`w-9 rounded-md border py-1 text-[11px] font-medium tabular-nums transition-colors ${
+                  year.paying
+                    ? 'border-ink-600 bg-ink-600 text-white hover:bg-ink-700'
+                    : 'border-slate-300 bg-white text-slate-400 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-500'
+                }`}
+              >
+                {year.age}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-slate-400">
+            {ownerName}'s age. Filled years pay in; click one to skip it. Contributions stop at{' '}
+            {Math.min(endAge, retirementAge)} whatever is ticked here.
+          </p>
+          {refused && (
+            <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+              {refused}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
         From {ownerName}'s age <strong>{currentAge}</strong>:{' '}
         <strong>{formatCurrency(baseAmount)}</strong> a year
