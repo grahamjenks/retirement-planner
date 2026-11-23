@@ -1,6 +1,21 @@
+/**
+ * What a pot is for tax. A savings pot (ISA, LISA, ordinary savings) is funded
+ * from money already taxed, so taking it back out is a return of capital and
+ * free. A pension pot — a SIPP, or an old workplace pot being managed
+ * separately — is funded before tax, so HMRC tops contributions up and takes
+ * its share back on the way out.
+ */
+export type PotKind = 'savings' | 'pension'
+
 export interface SavingsPot {
   id: string
   name: string
+  /**
+   * Pension pots are locked to `accessibleFromAge` like any other, but their
+   * withdrawals are taxed as pension income with the usual tax-free share,
+   * and `bonusRatePct` is tax relief rather than a government bonus.
+   */
+  kind: PotKind
   balance: number
   annualContribution: number
   growthRate: number // nominal annual %
@@ -8,9 +23,17 @@ export interface SavingsPot {
   accessibleFromAge: number
   /** When true, `accessibleFromAge` is ignored and tracks the retirement age. */
   accessAtRetirement: boolean
-  /** Government top-up on contributions, e.g. 25 for a LISA. */
+  /**
+   * Top-up added to each contribution. 25 for a LISA's government bonus, and
+   * also 25 for a SIPP, where basic-rate relief is claimed at source: pay in
+   * £800 of taxed income and £1,000 lands.
+   */
   bonusRatePct: number
-  /** Contribution ceiling the bonus applies to, e.g. £4,000 for a LISA. */
+  /**
+   * Contribution ceiling the top-up applies to — £4,000 for a LISA. Pension
+   * relief has no practical ceiling at these amounts, so a SIPP leaves this
+   * at `NO_BONUS_CAP`.
+   */
   bonusCapAnnual: number
   /** Age at which contributions must stop, e.g. 50 for a LISA. */
   contributionEndAge: number
@@ -83,6 +106,44 @@ export interface Person {
   dbSchemes: DbScheme[]
 }
 
+/**
+ * A home or other property.
+ *
+ * Deliberately not a pot: you cannot take £500 a year out of a house. Its
+ * value sits in the plan as wealth, and the only way it becomes spendable is
+ * selling — which is why `sellAtAge` and `replacementValue` carry the whole
+ * feature. Buying something smaller releases the difference; buying nothing
+ * releases the lot.
+ */
+export interface Property {
+  id: string
+  name: string
+  /** What it would fetch today, before any costs of selling. */
+  value: number
+  /** Nominal annual house price growth, reduced by inflation like any rate. */
+  growthRate: number
+  /** Still owed on it. Cleared from the proceeds when it is sold. */
+  mortgageBalance: number
+  /** Yearly mortgage payment while there are years left to run. */
+  mortgageAnnualPayment: number
+  mortgageYearsRemaining: number
+  /** The one you live in. Informational: no tax treatment hangs on it. */
+  isMainHome: boolean
+  /** Owner's age at which it is sold, or null to keep it for the whole plan. */
+  sellAtAge: number | null
+  /**
+   * What is bought in its place, in today's money. 0 sells outright; a smaller
+   * figure than `value` is a downsize, and the difference is what is released.
+   */
+  replacementValue: number
+  /** Agent, legal and moving costs, plus any tax on the gain, as % of value. */
+  sellingCostsPct: number
+  /** Where the released money lands: a pot id, or `pension:<personId>`. */
+  proceedsTargetId: string
+  /** Whose age `sellAtAge` refers to. */
+  ownerId: string
+}
+
 /** How each year's income shortfall is taken from the available sources. */
 export type DrawdownStrategy = 'proportional' | 'priority'
 
@@ -137,6 +198,9 @@ export interface Assumptions {
   /** Savings and investments, shared across the household. */
   pots: SavingsPot[]
 
+  /** Homes and other property. Wealth, but not something you can draw on. */
+  properties: Property[]
+
   drawdownStrategy: DrawdownStrategy
   /** Source ids in priority order — pot ids plus `pension:<personId>`. */
   drawdownOrder: string[]
@@ -159,8 +223,6 @@ export interface Assumptions {
   /** One-off lump sums in or out of a pot, e.g. an inheritance or a gift. */
   oneOffEvents: OneOffEvent[]
 
-  mortgageAnnualPayment: number
-  mortgageYearsRemaining: number
 }
 
 /** One person's position in a given projection year. */
@@ -211,9 +273,24 @@ export interface YearRow {
   potOneOffs: number[]
   potsTotal: number
 
+  /** End-of-year value of each property. */
+  propertyValues: number[]
+  /** Still owed on each property at the end of the year. */
+  propertyMortgages: number[]
+  /** Property value less what is still owed — wealth, but not spendable. */
+  propertyEquityTotal: number
+  /**
+   * Released into a pot by selling or downsizing this year, after costs and
+   * paying off the mortgage. Zero in every other year.
+   */
+  propertyReleased: number
+
   /** Combined DC pension pots. */
   pensionsTotal: number
+  /** Pots plus DC pensions: what the plan can actually draw on. */
   totalPot: number
+  /** `totalPot` plus property equity. */
+  netWorth: number
   /** Portion of `totalPot` not accessible this year. */
   lockedBalance: number
 

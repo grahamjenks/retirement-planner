@@ -7,6 +7,7 @@ import type {
   OneOffEvent,
   PensionType,
   Person,
+  Property,
   SavingsPot,
   SpendingBand,
 } from './types'
@@ -16,6 +17,32 @@ const LEGACY_V2 = 'retirement-planner:assumptions:v2'
 const LEGACY_V1 = 'retirement-planner:assumptions:v1'
 
 export const NO_CONTRIBUTION_LIMIT = 200
+
+/** A pension pot's relief has no practical ceiling at these amounts. */
+export const NO_BONUS_CAP = 1_000_000
+
+/*
+ * Ceilings on anything arriving as a list.
+ *
+ * Every scalar from a file is already clamped, because an age is a loop bound.
+ * A list is a loop bound too, and a worse one: the hero runs a retirement
+ * search per person, and each search is a full projection over every person
+ * and every pot, so the cost of a file grows faster than its size. A crafted
+ * backup with a few hundred people wedges the tab — and because the import is
+ * saved before the expensive render, it wedges it again on every later visit.
+ * These are generous against any real household and cheap against that.
+ */
+const MAX_PEOPLE = 10
+const MAX_POTS = 20
+const MAX_PROPERTIES = 20
+const MAX_SPENDING_CHANGES = 50
+const MAX_ONE_OFF_EVENTS = 50
+const MAX_DB_SCHEMES = 10
+const MAX_NAME = 60
+
+/** A name from untrusted input: a string, non-empty, and a sane length. */
+const name = (v: unknown, fallback: string) =>
+  typeof v === 'string' && v.trim() ? v.slice(0, MAX_NAME) : fallback
 
 export function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -131,7 +158,7 @@ function coerceScheme(raw: unknown, index: number): DbScheme {
   const base = makeScheme()
   return {
     id: typeof d.id === 'string' && d.id ? d.id : `scheme-${index}-${newId()}`,
-    name: typeof d.name === 'string' && d.name ? d.name : `Scheme ${index + 1}`,
+    name: name(d.name, `Scheme ${index + 1}`),
     accruedAnnualPension: num(d.accruedAnnualPension, base.accruedAnnualPension),
     accrualRatePct: rate(d.accrualRatePct, base.accrualRatePct),
     accruing: d.accruing !== false,
@@ -148,6 +175,7 @@ export interface PotPreset {
 }
 
 const basePot = {
+  kind: 'savings' as const,
   balance: 0,
   annualContribution: 0,
   accessibleFromAge: 0,
@@ -181,6 +209,35 @@ export const potPresets: PotPreset[] = [
       bonusRatePct: 25,
       bonusCapAnnual: 4000,
       contributionEndAge: 50,
+    },
+  },
+  {
+    label: 'SIPP (self-invested pension)',
+    description:
+      'Basic-rate relief tops contributions up by 25%. Locked until 57, then taxed like any pension.',
+    defaults: {
+      ...basePot,
+      kind: 'pension' as const,
+      name: 'SIPP',
+      growthRate: 5,
+      accessibleFromAge: 57,
+      bonusRatePct: 25,
+      bonusCapAnnual: NO_BONUS_CAP,
+      // Relief stops at 75; nobody in this model is contributing that late,
+      // but the figure is the real one rather than "no limit".
+      contributionEndAge: 75,
+    },
+  },
+  {
+    label: 'Old workplace pension',
+    description: 'A pot from a previous job, no longer contributed to.',
+    defaults: {
+      ...basePot,
+      kind: 'pension' as const,
+      name: 'Old workplace pension',
+      growthRate: 5,
+      accessibleFromAge: 57,
+      contributionEndAge: 0,
     },
   },
   {
@@ -220,9 +277,20 @@ function buildDefaults(): Assumptions {
       annualContribution: 1500,
     },
   ]
+  const home = makeProperty({
+    id: 'property-home',
+    name: 'Home',
+    ownerId: me.id,
+    value: 350000,
+    mortgageBalance: 150000,
+    mortgageAnnualPayment: 12000,
+    mortgageYearsRemaining: 15,
+    proceedsTargetId: pots[0].id,
+  })
   return {
     people: [me],
     pots,
+    properties: [home],
     drawdownStrategy: 'proportional',
     drawdownOrder: [...pots.map((p) => p.id), pensionSourceId(me.id)],
     inflationRate: 2.5,
@@ -233,8 +301,6 @@ function buildDefaults(): Assumptions {
     retirementAnnualExtras: 5200,
     spendingChanges: [],
     oneOffEvents: [],
-    mortgageAnnualPayment: 12000,
-    mortgageYearsRemaining: 15,
   }
 }
 
@@ -246,7 +312,7 @@ function coercePerson(raw: unknown, index: number): Person {
   return {
     ...base,
     id: typeof p.id === 'string' && p.id ? p.id : `person-${index}-${newId()}`,
-    name: typeof p.name === 'string' && p.name ? p.name : `Person ${index + 1}`,
+    name: name(p.name, `Person ${index + 1}`),
     currentAge: age(p.currentAge, base.currentAge),
     retirementAge: age(p.retirementAge, base.retirementAge),
     lifeExpectancy: age(p.lifeExpectancy, base.lifeExpectancy),
@@ -262,7 +328,7 @@ function coercePerson(raw: unknown, index: number): Person {
     pensionGrowthRate: rate(p.pensionGrowthRate, base.pensionGrowthRate),
     pensionAccessAge: age(p.pensionAccessAge, base.pensionAccessAge),
     dbSchemes: Array.isArray(p.dbSchemes)
-      ? p.dbSchemes.map(coerceScheme)
+      ? p.dbSchemes.slice(0, MAX_DB_SCHEMES).map(coerceScheme)
       : legacySchemeFrom(raw),
   }
 }
@@ -293,7 +359,8 @@ function coercePot(raw: unknown, index: number, ownerFallback: string): SavingsP
   const base = potPresets[0].defaults
   return {
     id: typeof p.id === 'string' && p.id ? p.id : `pot-${index}-${newId()}`,
-    name: typeof p.name === 'string' && p.name ? p.name : `Pot ${index + 1}`,
+    name: name(p.name, `Pot ${index + 1}`),
+    kind: p.kind === 'pension' ? 'pension' : 'savings',
     balance: num(p.balance, base.balance),
     annualContribution: num(p.annualContribution, base.annualContribution),
     growthRate: rate(p.growthRate, base.growthRate),
@@ -304,6 +371,51 @@ function coercePot(raw: unknown, index: number, ownerFallback: string): SavingsP
     contributionEndAge: age(p.contributionEndAge, base.contributionEndAge),
     contributionEndsAtRetirement: p.contributionEndsAtRetirement === true,
     ownerId: typeof p.ownerId === 'string' && p.ownerId ? p.ownerId : ownerFallback,
+  }
+}
+
+export function makeProperty(overrides: Partial<Property> = {}): Property {
+  return {
+    id: newId(),
+    name: 'Home',
+    value: 350000,
+    growthRate: 3,
+    mortgageBalance: 0,
+    mortgageAnnualPayment: 0,
+    mortgageYearsRemaining: 0,
+    isMainHome: true,
+    sellAtAge: null,
+    replacementValue: 0,
+    // Agent and legal fees run to roughly 2-3% of a sale; the rest of the
+    // allowance is there for moving costs, and for any tax on a gain where
+    // the property is not the one you live in.
+    sellingCostsPct: 3,
+    proceedsTargetId: '',
+    ownerId: '',
+    ...overrides,
+  }
+}
+
+function coerceProperty(raw: unknown, index: number, ownerFallback: string): Property {
+  const pr = (raw ?? {}) as Partial<Property>
+  const base = makeProperty()
+  const sellAt = pr.sellAtAge
+  return {
+    id: typeof pr.id === 'string' && pr.id ? pr.id : `property-${index}-${newId()}`,
+    name: name(pr.name, `Property ${index + 1}`),
+    value: Math.max(0, num(pr.value, base.value)),
+    growthRate: rate(pr.growthRate, base.growthRate),
+    mortgageBalance: Math.max(0, num(pr.mortgageBalance, 0)),
+    mortgageAnnualPayment: Math.max(0, num(pr.mortgageAnnualPayment, 0)),
+    mortgageYearsRemaining: age(pr.mortgageYearsRemaining, 0),
+    isMainHome: pr.isMainHome === true,
+    // null means "never sold", which is different from "sell at age 0".
+    sellAtAge: typeof sellAt === 'number' && Number.isFinite(sellAt) ? age(sellAt, 60) : null,
+    replacementValue: Math.max(0, num(pr.replacementValue, 0)),
+    sellingCostsPct: clamp(num(pr.sellingCostsPct, base.sellingCostsPct), 0, 100),
+    proceedsTargetId:
+      typeof pr.proceedsTargetId === 'string' ? pr.proceedsTargetId.slice(0, MAX_NAME) : '',
+    ownerId: typeof pr.ownerId === 'string' && pr.ownerId ? pr.ownerId : ownerFallback,
   }
 }
 
@@ -324,7 +436,7 @@ function coerceOneOff(raw: unknown, index: number, targetFallback: string): OneO
   const target = [e.targetId, e.potId].find((v): v is string => typeof v === 'string' && v !== '')
   return {
     id: typeof e.id === 'string' && e.id ? e.id : `oneoff-${index}-${newId()}`,
-    name: typeof e.name === 'string' && e.name ? e.name : 'Inheritance',
+    name: name(e.name, 'Inheritance'),
     atAge: age(e.atAge, 60),
     amount: num(e.amount, 0),
     targetId: target ?? targetFallback,
@@ -383,13 +495,13 @@ export function coerceAssumptions(raw: unknown): Assumptions {
   const fallback = buildDefaults()
 
   const people = Array.isArray(parsed.people) && parsed.people.length > 0
-    ? parsed.people.map(coercePerson)
+    ? parsed.people.slice(0, MAX_PEOPLE).map(coercePerson)
     : fallback.people
   const ownerFallback = people[0].id
   const validOwners = new Set(people.map((p) => p.id))
 
   const pots = Array.isArray(parsed.pots)
-    ? parsed.pots.map((p, i) => coercePot(p, i, ownerFallback))
+    ? parsed.pots.slice(0, MAX_POTS).map((p, i) => coercePot(p, i, ownerFallback))
     : fallback.pots
   // A pot whose owner was deleted falls back to the first person.
   pots.forEach((pot) => {
@@ -423,12 +535,15 @@ export function coerceAssumptions(raw: unknown): Assumptions {
   return {
     people,
     pots,
+    properties: coerceProperties(parsed, pots, ownerFallback),
     drawdownStrategy:
       parsed.drawdownStrategy === 'priority'
         ? 'priority'
         : ('proportional' as DrawdownStrategy),
     drawdownOrder: Array.isArray(parsed.drawdownOrder)
-      ? parsed.drawdownOrder.filter((id): id is string => typeof id === 'string')
+      ? parsed.drawdownOrder
+          .slice(0, MAX_POTS + MAX_PEOPLE)
+          .filter((id): id is string => typeof id === 'string')
       : [...pots.map((p) => p.id), ...people.map((p) => pensionSourceId(p.id))],
     inflationRate: num(parsed.inflationRate, fallback.inflationRate),
     tax: coerceTax(parsed.tax),
@@ -437,7 +552,7 @@ export function coerceAssumptions(raw: unknown): Assumptions {
     retirementMonthly: retired.monthly,
     retirementAnnualExtras: retired.extras,
     spendingChanges: Array.isArray(parsed.spendingChanges)
-      ? parsed.spendingChanges.map(coerceBand)
+      ? parsed.spendingChanges.slice(0, MAX_SPENDING_CHANGES).map(coerceBand)
       : [],
     // An event whose destination was deleted — a pot removed, or someone
     // switched to a salary-based pension — falls back to the first one left.
@@ -445,14 +560,50 @@ export function coerceAssumptions(raw: unknown): Assumptions {
     oneOffEvents:
       Array.isArray(parsed.oneOffEvents) && oneOffTargets.length > 0
         ? parsed.oneOffEvents
+            .slice(0, MAX_ONE_OFF_EVENTS)
             .map((e, i) => coerceOneOff(e, i, oneOffTargets[0]))
             .map((e) =>
               validOneOffTargets.has(e.targetId) ? e : { ...e, targetId: oneOffTargets[0] },
             )
         : [],
-    mortgageAnnualPayment: num(parsed.mortgageAnnualPayment, fallback.mortgageAnnualPayment),
-    mortgageYearsRemaining: num(parsed.mortgageYearsRemaining, fallback.mortgageYearsRemaining),
   }
+}
+
+/**
+ * Properties, with the household mortgage folded in.
+ *
+ * Plans saved before properties existed carry a single mortgage payment and a
+ * term, and nothing that owns them. Rather than keep two ways to model debt,
+ * that pair becomes the mortgage on a Home worth nothing in particular — the
+ * payments and the payoff year carry over exactly, and the value is there to
+ * be corrected.
+ */
+function coerceProperties(
+  parsed: Record<string, unknown>,
+  pots: SavingsPot[],
+  ownerFallback: string,
+): Property[] {
+  if (Array.isArray(parsed.properties)) {
+    return parsed.properties
+      .slice(0, MAX_PROPERTIES)
+      .map((pr, i) => coerceProperty(pr, i, ownerFallback))
+  }
+  const payment = Math.max(0, num(parsed.mortgageAnnualPayment, 0))
+  const years = age(parsed.mortgageYearsRemaining, 0)
+  if (payment <= 0 && years <= 0) return []
+  return [
+    makeProperty({
+      id: `property-${newId()}`,
+      name: 'Home',
+      ownerId: ownerFallback,
+      // What is left to pay, as a starting point for a figure only the owner
+      // knows. The payments and the term are the parts carried over exactly.
+      mortgageBalance: payment * years,
+      mortgageAnnualPayment: payment,
+      mortgageYearsRemaining: years,
+      proceedsTargetId: pots[0]?.id ?? '',
+    }),
+  ]
 }
 
 /** Folds a single-person v2 record into the new household shape. */

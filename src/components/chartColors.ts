@@ -7,6 +7,7 @@
  *   blue / indigo  → DC pension pots
  *   teal → green   → savings pots
  *   slate          → salary
+ *   deep brown     → property
  *
  * Savings pots deliberately avoid every red, pink and magenta hue so a pot
  * segment is never confused with a shortfall.
@@ -31,6 +32,14 @@ export const POT_COLORS = [
 export const STATE_PENSION_COLOR = '#f59e0b'
 export const DB_PENSION_COLOR = '#8b5cf6'
 export const SALARY_COLOR = '#94a3b8'
+
+/**
+ * Property. A deep brown, chosen because it is the one hue left that nothing
+ * else claims: it cannot be read as a pension, a savings pot, guaranteed
+ * income, or a shortfall. Dark enough not to be mistaken for the amber the
+ * state pension uses.
+ */
+export const PROPERTY_COLOR = '#78350f'
 
 /** Reserved for shortfalls and the outgoings line — nothing else. */
 export const ALERT_COLOR = '#e11d48'

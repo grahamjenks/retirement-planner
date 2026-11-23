@@ -121,6 +121,49 @@ export function potContributionAt(
   return contribution + bonusable * (Math.max(0, pot.bonusRatePct) / 100)
 }
 
+/**
+ * Mortgage payments due across every property in a given year.
+ *
+ * Mortgages used to be a single household figure. They now belong to the
+ * property they are secured on, so selling a house clears its own debt — but
+ * the rest of the app still wants one number per year, which is this.
+ */
+export function mortgagePaymentAt(a: Assumptions, t: number): number {
+  return a.properties.reduce(
+    (sum, pr) =>
+      Math.max(0, pr.mortgageYearsRemaining) - t > 0
+        ? sum + Math.max(0, pr.mortgageAnnualPayment)
+        : sum,
+    0,
+  )
+}
+
+/** Years until the last mortgage in the household is paid off. */
+export function mortgageYearsRemaining(a: Assumptions): number {
+  return a.properties.reduce(
+    (most, pr) => Math.max(most, Math.max(0, pr.mortgageYearsRemaining)),
+    0,
+  )
+}
+
+/** Still owed across every property today. */
+export function totalMortgageBalance(a: Assumptions): number {
+  return a.properties.reduce((sum, pr) => sum + Math.max(0, pr.mortgageBalance), 0)
+}
+
+/** Property value less what is still owed on it, today. */
+export function propertyEquity(a: Assumptions): number {
+  return a.properties.reduce(
+    (sum, pr) => sum + Math.max(0, Math.max(0, pr.value) - Math.max(0, pr.mortgageBalance)),
+    0,
+  )
+}
+
+/** Selling costs as a share of value: never negative, never over the value. */
+function clampPct(v: number): number {
+  return Math.min(100, Math.max(0, v))
+}
+
 export function annualPensionContribution(person: Person, salary: number): number {
   if (person.pensionType !== 'dc') return 0
   const pct = Math.max(0, person.employeePensionPct) + Math.max(0, person.employerPensionPct)
@@ -208,6 +251,11 @@ export function simulate(
     ),
   )
 
+  const propertyGrowth = a.properties.map((pr) => realRate(pr.growthRate, a.inflationRate))
+  const propertyValues = a.properties.map((pr) => Math.max(0, pr.value))
+  const propertyMortgages = a.properties.map((pr) => Math.max(0, pr.mortgageBalance))
+  const propertiesSold = new Set<string>()
+
   let balances = a.pots.map((p) => Math.max(0, p.balance))
   const pensionPots = new Map(
     a.people.map((p) => [p.id, p.pensionType === 'dc' ? Math.max(0, p.currentPensionPot) : 0]),
@@ -231,8 +279,25 @@ export function simulate(
 
   for (let t = 0; t <= horizon; t++) {
     const anchorAge = a.people[0].currentAge + t
-    const mortgageActive = t < a.mortgageYearsRemaining
-    const mortgagePayment = mortgageActive ? Math.max(0, a.mortgageAnnualPayment) : 0
+    /*
+     * Mortgages run down in a straight line to zero at the end of their term.
+     * A real repayment mortgage is interest-heavy early, so this understates
+     * what is still owed in the first years; it is the outstanding balance at
+     * a *sale* that matters here, and that is usually years out.
+     */
+    let mortgagePayment = 0
+    let mortgageActive = false
+    a.properties.forEach((pr, i) => {
+      if (propertiesSold.has(pr.id)) return
+      const yearsLeft = Math.max(0, pr.mortgageYearsRemaining) - t
+      if (yearsLeft <= 0) {
+        propertyMortgages[i] = 0
+        return
+      }
+      mortgageActive = true
+      mortgagePayment += Math.max(0, pr.mortgageAnnualPayment)
+      propertyMortgages[i] = Math.max(0, propertyMortgages[i] - propertyMortgages[i] / yearsLeft)
+    })
 
     const accessAges = a.pots.map((pot) => {
       const owner = potOwner(a, pot)
@@ -346,27 +411,67 @@ export function simulate(
     // get. Money in is spendable straight away, subject to the pot's own
     // access rules; money out can never take a pot below zero.
     const potOneOffs = new Array<number>(balances.length).fill(0)
-    for (const event of a.oneOffEvents) {
-      if (event.atAge !== anchorAge) continue
 
-      // A pension destination lands in that person's DC pot, which is locked
-      // until their access age like the rest of it. Salary-based schemes hold
-      // no pot, so there is nowhere for the money to go.
-      const pensionPersonId = personIdFromSource(event.targetId)
+    /**
+     * Moves money into or out of a named destination — a savings pot, or a
+     * person's DC pension. Money out can never take the destination below
+     * zero. Shared by one-off events and by the proceeds of a property sale,
+     * which both have to land somewhere the plan already knows about.
+     */
+    const depositTo = (targetId: string, amount: number): void => {
+      // A pension destination is locked until that person's access age, like
+      // the rest of their pot. Salary-based schemes hold no pot at all, so
+      // there is nowhere for the money to go.
+      const pensionPersonId = personIdFromSource(targetId)
       if (pensionPersonId !== null) {
-        if (!dcPersonIds.has(pensionPersonId)) continue
+        if (!dcPersonIds.has(pensionPersonId)) return
         const current = pensionPots.get(pensionPersonId) ?? 0
-        const applied = event.amount < 0 ? -Math.min(current, -event.amount) : event.amount
-        pensionPots.set(pensionPersonId, current + applied)
-        continue
+        pensionPots.set(
+          pensionPersonId,
+          current + (amount < 0 ? -Math.min(current, -amount) : amount),
+        )
+        return
       }
-
-      const i = potIndexById.get(event.targetId)
-      if (i === undefined) continue
-      const applied = event.amount < 0 ? -Math.min(balances[i], -event.amount) : event.amount
+      const i = potIndexById.get(targetId)
+      if (i === undefined) return
+      const applied = amount < 0 ? -Math.min(balances[i], -amount) : amount
       potOneOffs[i] += applied
       balances[i] += applied
     }
+
+    for (const event of a.oneOffEvents) {
+      if (event.atAge !== anchorAge) continue
+      depositTo(event.targetId, event.amount)
+    }
+
+    /*
+     * Property: grow it, then sell it if this is the year. Selling is the only
+     * way a house becomes spendable — it is never a drawdown source, because
+     * you cannot take a year's income out of one. Buying something smaller in
+     * its place releases the difference and keeps the rest growing.
+     *
+     * Note the deliberate omission: `returnShocks` is not applied here. The
+     * Monte Carlo run exists to show sequence risk on a pot being drawn down,
+     * and a house is neither drawn down nor sold at a random time.
+     */
+    let propertyReleased = 0
+    a.properties.forEach((pr, i) => {
+      if (propertiesSold.has(pr.id)) return
+      propertyValues[i] *= 1 + propertyGrowth[i]
+
+      if (pr.sellAtAge === null) return
+      const owner = findPerson(a, pr.ownerId) ?? a.people[0]
+      if (owner.currentAge + t < pr.sellAtAge) return
+
+      propertiesSold.add(pr.id)
+      const afterCosts = propertyValues[i] * (1 - clampPct(pr.sellingCostsPct) / 100)
+      const replacement = Math.max(0, pr.replacementValue)
+      const released = Math.max(0, afterCosts - propertyMortgages[i] - replacement)
+      propertyValues[i] = replacement
+      propertyMortgages[i] = 0
+      propertyReleased += released
+      if (released > 0) depositTo(pr.proceedsTargetId, released)
+    })
 
     // --- Spending, tax, and the gap to fill ---
     // Salaries are entered as take-home, so only pension income is taxed here.
@@ -433,15 +538,54 @@ export function simulate(
       return net
     }
 
-    /** Savings pots are tax-free, so gross and net are the same. */
-    const drawPot = (i: number, wanted: number): number => {
-      const take = Math.min(balances[i], Math.max(0, wanted))
-      if (take <= 0) return 0
-      balances[i] -= take
-      potTaken[i] += take
-      withdrawal += take
-      netDelivered += take
-      return take
+    /**
+     * Draws a *net* amount from a pot, returning what the household actually
+     * gets to spend.
+     *
+     * A savings pot was funded from taxed money, so net and gross are the
+     * same. A pension pot — a SIPP — was not, so the amount has to be grossed
+     * up and taxed on the way out exactly as a workplace DC pot is, sharing
+     * the owner's tax bands and their lifetime tax-free allowance. Grossing up
+     * happens here rather than at the call sites, so callers can keep asking
+     * for the net amount they need whatever kind of pot answers.
+     */
+    const drawPot = (i: number, netWanted: number): number => {
+      const want = Math.max(0, netWanted)
+      if (want <= 0 || balances[i] <= 0) return 0
+      const pot = a.pots[i]
+
+      if (pot.kind !== 'pension') {
+        const take = Math.min(balances[i], want)
+        if (take <= 0) return 0
+        balances[i] -= take
+        potTaken[i] += take
+        withdrawal += take
+        netDelivered += take
+        return take
+      }
+
+      const ownerId = potOwner(a, pot).id
+      const base = taxBase.get(ownerId) ?? 0
+      const freeRemaining = Math.max(
+        0,
+        a.tax.taxFreeLumpSumAllowance - (taxFreeUsed.get(ownerId) ?? 0),
+      )
+      const gross = Math.min(balances[i], grossUpPension(want, base, a.tax, freeRemaining))
+      if (gross <= 0) return 0
+      const free = taxFreePart(gross, a.tax, freeRemaining)
+      const taxable = gross - free
+      taxFreeUsed.set(ownerId, (taxFreeUsed.get(ownerId) ?? 0) + free)
+      const extraTax = marginalTax(base, taxable, a.tax)
+      balances[i] -= gross
+      potTaken[i] += gross
+      taxableDrawn.set(ownerId, (taxableDrawn.get(ownerId) ?? 0) + taxable)
+      taxBase.set(ownerId, base + taxable)
+      personTax.set(ownerId, (personTax.get(ownerId) ?? 0) + extraTax)
+      taxTotal += extraTax
+      withdrawal += gross
+      const net = gross - extraTax
+      netDelivered += net
+      return net
     }
 
     if (netNeed > 0) {
@@ -549,6 +693,10 @@ export function simulate(
       py.taxablePensionWithdrawal = taxableDrawn.get(py.id) ?? 0
     }
 
+    const propertyEquityTotal = propertyValues.reduce(
+      (sum, v, i) => sum + Math.max(0, v - propertyMortgages[i]),
+      0,
+    )
     const potsTotal = balances.reduce((s, b) => s + b, 0)
     const pensionsTotal = peopleYears.reduce((s, p) => s + p.pensionPot, 0)
     const lockedBalance =
@@ -571,8 +719,13 @@ export function simulate(
       potContributions,
       potOneOffs,
       potsTotal,
+      propertyValues: [...propertyValues],
+      propertyMortgages: [...propertyMortgages],
+      propertyEquityTotal,
+      propertyReleased,
       pensionsTotal,
       totalPot: potsTotal + pensionsTotal,
+      netWorth: potsTotal + pensionsTotal + propertyEquityTotal,
       lockedBalance,
       salaryTotal,
       grossSalaryTotal,

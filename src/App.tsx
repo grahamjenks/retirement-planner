@@ -13,6 +13,7 @@ import { Panel } from './components/Panel'
 import { PeopleEditor } from './components/PeopleEditor'
 import { PotsEditor } from './components/PotsEditor'
 import { PrintHeader } from './components/PrintHeader'
+import { PropertyEditor } from './components/PropertyEditor'
 import { ResultTabs } from './components/ResultTabs'
 import { RetirementAgeBar } from './components/RetirementAgeBar'
 import { ScenarioBar } from './components/ScenarioBar'
@@ -32,6 +33,7 @@ import {
   drawdownStartRow,
   findEarliestRetirementAge,
   maxRetirementIncome,
+  mortgageYearsRemaining,
   firstShortfallRow,
   potsExhaustedRow,
   realRate,
@@ -128,7 +130,7 @@ function App() {
   )
   const earliest = earliestByPerson[0]
 
-  const mortgagePaidOffYear = new Date().getFullYear() + a.mortgageYearsRemaining
+  const mortgagePaidOffYear = new Date().getFullYear() + mortgageYearsRemaining(a)
   const retirementRow = rows.find((r) => r.householdRetired) ?? null
   const potAtRetirement = retirementRow?.totalPot ?? 0
   const lockedAtRetirement = retirementRow?.lockedBalance ?? 0
@@ -174,7 +176,18 @@ function App() {
     return undefined
   }
 
+  // Deleting the last property while looking at it would otherwise leave the
+  // chart in a mode its own toggle no longer offers.
+  const wealthMode: WealthChartMode =
+    chartMode === 'property' && a.properties.length === 0 ? 'stacked' : chartMode
+
   const shortfallTotal = shortfall ? shortfallTotals.total : 0
+  // Property only ever reaches the plan through a sale, so this is the whole
+  // of what the houses contribute to funding retirement.
+  const releasedTotal = useMemo(
+    () => rows.reduce((sum, r) => sum + r.propertyReleased, 0),
+    [rows],
+  )
   const exhaustedAge = exhausted ? exhausted.people[0].age : null
 
   /** Switches to the tab holding a panel and scrolls to it. */
@@ -254,18 +267,32 @@ function App() {
           title="Wealth over time"
           action={
             <SegmentedToggle
-              value={chartMode}
+              value={wealthMode}
               onChange={setChartMode}
               ariaLabel="Wealth chart mode"
               options={
-                [
-                  ['stacked', 'Stacked total'],
-                  ['lines', 'Compare pots'],
-                ] as const
+                a.properties.length > 0
+                  ? ([
+                      ['stacked', 'Stacked total'],
+                      ['lines', 'Compare pots'],
+                      [
+                        'property',
+                        'With property',
+                        'Add property equity on top — wealth, not something the plan can spend',
+                      ],
+                    ] as const)
+                  : ([
+                      ['stacked', 'Stacked total'],
+                      ['lines', 'Compare pots'],
+                    ] as const)
               }
             />
           }
-          description="Pots and DC pensions only — salary-based pensions pay an income and hold no balance."
+          description={
+            wealthMode === 'property'
+              ? 'Property equity sits in brown at the top of the stack. It is wealth, not income: the bands below it are what the plan can draw on, and the only way the brown becomes spendable is selling. Salary-based pensions pay an income and hold no balance, so they are not here.'
+              : 'Pots and DC pensions only — salary-based pensions pay an income and hold no balance.'
+          }
         >
           <WealthChart
             assumptions={deferred}
@@ -273,7 +300,7 @@ function App() {
             shortfallYear={shortfall?.year ?? null}
             drawdownYear={drawdownRow?.year ?? null}
             unlocks={unlocks}
-            mode={chartMode}
+            mode={wealthMode}
             compare={chartCompare?.byRows}
           />
         </Panel>
@@ -737,22 +764,18 @@ function App() {
             </p>
           </InputSection>
 
-          <InputSection title="Mortgage">
-            <NumberField
-              label="Current annual mortgage payment"
-              value={a.mortgageAnnualPayment}
-              onChange={(v) => update('mortgageAnnualPayment', v)}
-              prefix="£"
-              step={100}
-              hint={`${formatMonthly(a.mortgageAnnualPayment)} a month`}
-            />
-            <NumberField
-              label="Years remaining"
-              value={a.mortgageYearsRemaining}
-              onChange={(v) => update('mortgageYearsRemaining', v)}
-              min={0}
-              max={40}
-              hint={`Paid off in ${mortgagePaidOffYear}.`}
+          <InputSection title={`Property (${a.properties.length})`}>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Homes and other property, with the mortgage on each. Property is wealth, not
+              income — the only way it becomes spendable is selling, so a sale or a downsize
+              is where the money comes from.
+            </p>
+            <PropertyEditor
+              properties={a.properties}
+              pots={a.pots}
+              people={a.people}
+              inflationRate={a.inflationRate}
+              onChange={(properties) => update('properties', properties)}
             />
           </InputSection>
 
@@ -945,7 +968,11 @@ function App() {
 
             {/* Everything the hero leaves out, deliberately quiet. */}
             <div className="print-block rounded-2xl border border-slate-200 bg-white py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <div className="grid grid-cols-1 gap-y-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 xl:gap-y-0 xl:divide-x xl:divide-slate-200 xl:dark:divide-slate-700">
+              <div
+                className={`grid grid-cols-1 gap-y-5 sm:grid-cols-2 lg:grid-cols-3 xl:gap-y-0 xl:divide-x xl:divide-slate-200 xl:dark:divide-slate-700 ${
+                  deferred.properties.length > 0 ? 'xl:grid-cols-6' : 'xl:grid-cols-5'
+                }`}
+              >
                 <SummaryCard
                   label="Pot at retirement"
                   value={formatCurrency(potAtRetirement)}
@@ -984,6 +1011,17 @@ function App() {
                   value={formatCurrency(guaranteedInRetirement)}
                   sub="State + salary-based pensions, a year"
                 />
+                {deferred.properties.length > 0 && (
+                  <SummaryCard
+                    label="Property equity"
+                    value={formatCurrency(finalRow?.propertyEquityTotal ?? 0)}
+                    sub={
+                      releasedTotal > 0
+                        ? `${formatCurrency(releasedTotal)} released into the plan by selling`
+                        : 'Never sold, so none of it reaches the plan'
+                    }
+                  />
+                )}
                 <SummaryCard
                   label="Most you could spend"
                   value={maxIncome.impossible ? 'Nothing works' : formatCurrency(maxIncome.annual)}
