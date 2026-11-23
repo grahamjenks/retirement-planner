@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ActionMenu, HeaderButton } from './components/ActionMenu'
 import { AssumptionBar } from './components/AssumptionBar'
 import { BalancesTable } from './components/BalancesTable'
 import { ContributionsChart } from './components/ContributionsChart'
@@ -96,6 +97,9 @@ function App() {
   const [undoReset, setUndoReset] = useState<ScenarioStore | null>(null)
   const [chartMode, setChartMode] = useState<WealthChartMode>('stacked')
   const [showInputs, setShowInputs] = useState(true)
+  const [stacked] = useState(
+    () => typeof window !== 'undefined' && !window.matchMedia('(min-width: 1280px)').matches,
+  )
   const [tab, setTab] = useState<TabId>('overview')
   // Set only for the moment it takes to print; see handlePrint.
   const [printAll, setPrintAll] = useState(false)
@@ -485,10 +489,15 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       <header className="no-print border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-        <div className="mx-auto flex max-w-[1800px] flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold">Retirement Planner</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            {/*
+              Dropped on a phone, where the header stacks and every line of it
+              pushes the first real figure further down. The same fact is on
+              the Inflation section's own summary line.
+            */}
+            <p className="hidden text-xs text-slate-500 sm:block dark:text-slate-400">
               Household plan — all figures in today's money, after {a.inflationRate}% inflation.
             </p>
           </div>
@@ -513,35 +522,9 @@ function App() {
                 ↷ Redo
               </button>
             </span>
-            <button
-              type="button"
-              onClick={() => setShowInputs((v) => !v)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
+            <HeaderButton onClick={() => setShowInputs((v) => !v)}>
               {showInputs ? '◀ Hide inputs' : '▶ Show inputs'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handlePrint()}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-              title="Opens your browser's print dialog — choose Save as PDF"
-            >
-              Export PDF
-            </button>
-            <button
-              type="button"
-              onClick={() => exportStore(plans.store)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              Export backup
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              Import backup
-            </button>
+            </HeaderButton>
             <input
               ref={fileInputRef}
               type="file"
@@ -553,16 +536,22 @@ function App() {
                 e.target.value = ''
               }}
             />
-            <button
-              type="button"
-              onClick={handleReset}
-              className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
-            >
-              Reset
-            </button>
+            <ActionMenu
+              label="More"
+              actions={[
+                {
+                  label: 'Export PDF',
+                  title: "Opens your browser's print dialog — choose Save as PDF",
+                  onSelect: () => void handlePrint(),
+                },
+                { label: 'Export backup', onSelect: () => exportStore(plans.store) },
+                { label: 'Import backup', onSelect: () => fileInputRef.current?.click() },
+                { label: 'Reset everything', onSelect: handleReset, destructive: true },
+              ]}
+            />
           </div>
         </div>
-        <div className="mx-auto max-w-[1800px]">
+        <div className="mx-auto max-w-[1600px]">
           <ScenarioBar
             scenarios={plans.store.scenarios}
             activeId={plans.store.activeId}
@@ -578,14 +567,14 @@ function App() {
           />
         </div>
         {importError && (
-          <div className="mx-auto max-w-[1800px] px-4 pb-3">
+          <div className="mx-auto max-w-[1600px] px-4 pb-3">
             <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:bg-rose-950 dark:text-rose-400">
               {importError}
             </p>
           </div>
         )}
         {undoReset && (
-          <div className="mx-auto max-w-[1800px] px-4 pb-3">
+          <div className="mx-auto max-w-[1600px] px-4 pb-3">
             <div className="flex flex-wrap items-center gap-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
               <span>Reset to the default example. Your previous plan is still recoverable.</span>
               <button
@@ -607,18 +596,33 @@ function App() {
         )}
       </header>
 
-      <main className="mx-auto flex max-w-[1800px] flex-col gap-6 px-4 py-6 lg:flex-row">
+      {/*
+        Side by side only from xl. At lg the sidebar's fixed 384px left the
+        results column 660px at a 1100px window — charts shrank to 618px and
+        the year-by-year tables started scrolling sideways. Below xl both
+        columns get the full width instead, one after the other.
+      */}
+      <main className="mx-auto flex max-w-[1600px] flex-col gap-6 px-4 py-6 xl:flex-row">
         {/*
-          Below lg the two columns stack, and the inputs are long enough that
-          leading with them buries the answer thousands of pixels down the page.
-          Results first on a phone; side by side from lg up.
+          The plan leads when the layout stacks.
+          
+          Results used to come first here, because the inputs were 4,159px of
+          open form and leading with them buried the answer. Collapsed, the
+          whole sidebar is a few hundred pixels of headers, so it reads as a
+          contents list — and every section starts shut on a stacked layout,
+          including People, so you land on the plan in summary and then the
+          answer, rather than scrolling 2,445px of results to change a figure.
         */}
         <aside
-          className={`no-print order-last w-full shrink-0 rounded-2xl border border-slate-200 bg-white lg:order-none lg:w-96 dark:border-slate-700 dark:bg-slate-800 ${
+          className={`no-print w-full shrink-0 rounded-2xl border border-slate-200 bg-white xl:w-96 dark:border-slate-700 dark:bg-slate-800 ${
             showInputs ? '' : 'hidden'
           }`}
         >
-          <InputSection title={`People (${a.people.length})`} summary={sectionSummary.people}>
+          <InputSection
+            title={`People (${a.people.length})`}
+            summary={sectionSummary.people}
+            defaultOpen={!stacked}
+          >
             <PeopleEditor
               people={a.people}
               inflationRate={a.inflationRate}
@@ -1053,7 +1057,7 @@ function App() {
             {/* Everything the hero leaves out, deliberately quiet. */}
             <div className="print-block rounded-2xl border border-slate-200 bg-white py-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <div
-                className={`grid grid-cols-1 gap-y-5 sm:grid-cols-2 lg:grid-cols-3 xl:gap-y-0 xl:divide-x xl:divide-slate-200 xl:dark:divide-slate-700 ${
+                className={`grid grid-cols-1 gap-y-5 sm:grid-cols-2 md:grid-cols-3 xl:gap-y-0 xl:divide-x xl:divide-slate-200 xl:dark:divide-slate-700 ${
                   deferred.properties.length > 0 ? 'xl:grid-cols-6' : 'xl:grid-cols-5'
                 }`}
               >
@@ -1149,7 +1153,7 @@ function App() {
         </section>
       </main>
 
-      <footer className="mx-auto max-w-[1800px] px-4 pb-8 text-center text-xs text-slate-400">
+      <footer className="mx-auto max-w-[1600px] px-4 pb-8 text-center text-xs text-slate-400">
         A planning estimate, not financial advice. Salary-based (defined benefit) pensions are
         modelled as a guaranteed income from their pension age; career-average schemes accrue a share
         of salary each year worked. Income tax is applied to pension income, and take-home pay is
