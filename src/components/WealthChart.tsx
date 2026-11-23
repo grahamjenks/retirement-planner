@@ -14,7 +14,7 @@ import {
 } from 'recharts'
 import { formatCurrencyCompact } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
-import { ALERT_COLOR, PENSION_COLORS, POT_COLORS } from './chartColors'
+import { ALERT_COLOR, PENSION_COLORS, POT_COLORS, PROPERTY_COLOR } from './chartColors'
 import { CompareNote } from './CompareNote'
 import { COMPARE_INK, ghostLine, rowsByYear, type ChartCompare } from './chartCompare'
 import { WealthTooltip } from './WealthTooltip'
@@ -22,7 +22,16 @@ import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import { YearAgeTick } from './YearAxisTick'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
 
-export type WealthChartMode = 'stacked' | 'lines'
+/**
+ * `property` is `stacked` plus the house.
+ *
+ * It is a separate view rather than always-on because property equity is
+ * usually the largest number in the plan: stacked in by default it dwarfs the
+ * drawable bands and doubles the y-axis, which costs exactly the resolution
+ * you need to see a pot running dry. Opt in to see total wealth; stay out to
+ * see what the plan can spend.
+ */
+export type WealthChartMode = 'stacked' | 'lines' | 'property'
 
 interface WealthChartProps {
   assumptions: Assumptions
@@ -59,6 +68,14 @@ function WealthChartBase({
     a.people.map((p) => baseYearOf(rows) + (p.retirementAge - p.currentAge)),
   )
 
+  /*
+   * Property rides at the top of the stack, in its own hue, because it is the
+   * one band here that cannot be spent — only sold. Keeping it last means the
+   * drawable bands below it still reach zero where they always did, so the
+   * year the money runs out is as visible as before.
+   */
+  const showProperty = mode === 'property' && a.properties.length > 0
+
   const compareByYear = rowsByYear(compare)
 
   const data = rows.map((r) => {
@@ -70,6 +87,7 @@ function WealthChartBase({
     a.pots.forEach((_pot, i) => {
       point[`pot_${i}`] = r.potBalances[i] ?? 0
     })
+    if (showProperty) point.property = r.propertyEquityTotal
     const other = compareByYear.get(r.year)
     if (other) {
       let total = 0
@@ -87,6 +105,10 @@ function WealthChartBase({
           total += balance
         }
       })
+      if (showProperty) {
+        point.c_property = other.propertyEquityTotal
+        total += other.propertyEquityTotal
+      }
       point.c_total = total
     }
     return point
@@ -103,6 +125,9 @@ function WealthChartBase({
       name: pot.name,
       color: POT_COLORS[i % POT_COLORS.length],
     })),
+    ...(showProperty
+      ? [{ key: 'property', name: 'Property equity', color: PROPERTY_COLOR }]
+      : []),
   ]
 
   return (
@@ -146,7 +171,7 @@ function WealthChartBase({
             <Tooltip content={<WealthTooltip assumptions={a} rows={rows} />} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
 
-            {mode === 'stacked'
+            {mode !== 'lines'
               ? series.map((s) => (
                   <Area
                     key={s.key}
@@ -178,9 +203,7 @@ function WealthChartBase({
               pot by pot, each series can shadow its own line directly.
             */}
             {compare &&
-              (mode === 'stacked' ? (
-                <Line {...ghostLine} dataKey="c_total" stroke={COMPARE_INK} />
-              ) : (
+              (mode === 'lines' ? (
                 series.map((s) => (
                   <Line
                     {...ghostLine}
@@ -189,6 +212,8 @@ function WealthChartBase({
                     stroke={s.color}
                   />
                 ))
+              ) : (
+                <Line {...ghostLine} dataKey="c_total" stroke={COMPARE_INK} />
               ))}
 
             {unlocks.map((u, ui) => (
@@ -253,9 +278,9 @@ function WealthChartBase({
         <CompareNote
           name={compare.name}
           of={
-            mode === 'stacked'
-              ? 'its total, against the top of the stack'
-              : 'the same pots and pensions'
+            mode === 'lines'
+              ? 'the same pots and pensions'
+              : 'its total, against the top of the stack'
           }
         />
       )}

@@ -1,5 +1,11 @@
 import { formatCurrency, formatMonthly } from '../lib/format'
-import { realRate, retirementBaselineAnnual, workingCostsAnnual } from '../lib/projection'
+import {
+  mortgagePaymentAt,
+  mortgageYearsRemaining,
+  realRate,
+  retirementBaselineAnnual,
+  workingCostsAnnual,
+} from '../lib/projection'
 import type { Assumptions } from '../lib/types'
 
 interface PrintHeaderProps {
@@ -81,8 +87,8 @@ export function PrintHeader({ assumptions: a }: PrintHeaderProps) {
               {formatMonthly(retirementBaselineAnnual(a))}/mth)
             </li>
             <li>
-              Mortgage {formatCurrency(a.mortgageAnnualPayment)}/yr for {a.mortgageYearsRemaining}{' '}
-              more years
+              Mortgage {formatCurrency(mortgagePaymentAt(a, 0))}/yr for{' '}
+              {mortgageYearsRemaining(a)} more years
             </li>
             <li>
               Tax {a.tax.enabled ? 'applied' : 'off'} — allowance{' '}

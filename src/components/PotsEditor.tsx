@@ -131,6 +131,10 @@ function PotCard({
   const bonus = grossContribution - pot.annualContribution
   const contributionsCapped = endAge < NO_CONTRIBUTION_LIMIT
   const contributionsEnded = currentAge >= endAge
+  // The same mechanic carries a LISA's government bonus and a SIPP's
+  // basic-rate relief, so only the wording changes between them.
+  const isPension = pot.kind === 'pension'
+  const topUpWord = isPension ? 'tax relief' : 'bonus'
 
   return (
     <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
@@ -253,6 +257,14 @@ function PotCard({
               🔒 Locked until {accessAge}
             </span>
           )}
+          {isPension && (
+            <span
+              className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-700 dark:bg-ink-950 dark:text-ink-300"
+              title="Taxed as pension income on the way out, with the usual tax-free share of each withdrawal"
+            >
+              Pension — taxed on withdrawal
+            </span>
+          )}
           {contributionsCapped && (
             <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
               {contributionsEnded
@@ -262,7 +274,7 @@ function PotCard({
           )}
           {bonus > 0 && (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-              +{formatCurrency(bonus)} bonus/yr
+              +{formatCurrency(bonus)} {topUpWord}/yr
             </span>
           )}
         </div>
@@ -273,20 +285,20 @@ function PotCard({
         onClick={() => setShowAdvanced((s) => !s)}
         className="mt-2 text-xs text-slate-400 hover:text-ink-600 dark:hover:text-ink-400"
       >
-        {showAdvanced ? 'Hide' : 'Show'} government bonus settings
+        {showAdvanced ? 'Hide' : 'Show'} {isPension ? 'tax relief' : 'government bonus'} settings
       </button>
 
       {showAdvanced && (
         <div className="mt-2 grid grid-cols-2 gap-3">
           <NumberField
-            label="Gov. bonus %"
+            label={isPension ? 'Tax relief %' : 'Gov. bonus %'}
             value={pot.bonusRatePct}
             onChange={(v) => onChange({ bonusRatePct: v })}
             suffix="%"
             max={100}
           />
           <NumberField
-            label="Bonus applies up to"
+            label={isPension ? 'Relief applies up to' : 'Bonus applies up to'}
             value={pot.bonusCapAnnual}
             onChange={(v) => onChange({ bonusCapAnnual: v })}
             prefix="£"
