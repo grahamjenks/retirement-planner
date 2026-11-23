@@ -34,6 +34,8 @@ import {
   findEarliestRetirementAge,
   maxRetirementIncome,
   mortgageYearsRemaining,
+  propertyEquity,
+  totalMortgageBalance,
   firstShortfallRow,
   potsExhaustedRow,
   realRate,
@@ -174,6 +176,57 @@ function App() {
       return compareView.earliestByName.get(person.name) ?? null
     }
     return undefined
+  }
+
+  /*
+   * One line per sidebar section, for when it is shut.
+   *
+   * Every section but People now starts closed — the sidebar was 4,159px of
+   * open form before anyone had decided anything — so each needs to say what
+   * it holds, or the panel becomes nine unlabelled drawers.
+   */
+  const sectionSummary = {
+    people: a.people
+      .map((person) => `${person.name} ${person.currentAge}, retires ${person.retirementAge}`)
+      .join(' · '),
+    spending: `${formatMonthly(workingCostsAnnual(a))} a month now · ${formatMonthly(
+      retirementBaselineAnnual(a),
+    )} retired`,
+    spendingChanges:
+      a.spendingChanges.length === 0
+        ? 'None — spending holds at the retirement figure'
+        : [...a.spendingChanges]
+            .sort((x, y) => x.fromAge - y.fromAge)
+            .map((band) => `${formatCurrency(band.amount)} from ${band.fromAge}`)
+            .join(' · '),
+    oneOffs:
+      a.oneOffEvents.length === 0
+        ? 'None'
+        : a.oneOffEvents
+            .map((event) => `${event.name} ${formatCurrency(event.amount)} at ${event.atAge}`)
+            .join(' · '),
+    pots:
+      a.pots.length === 0
+        ? 'None yet'
+        : `${formatCurrency(a.pots.reduce((sum, pot) => sum + pot.balance, 0))} across ${a.pots
+            .map((pot) => pot.name)
+            .join(', ')}`,
+    drawdown:
+      a.drawdownStrategy === 'proportional'
+        ? 'All pots drawn on together'
+        : 'Pots drawn one at a time, in a set order',
+    tax: a.tax.enabled
+      ? `Applied — ${a.tax.basicRatePct}% then ${a.tax.higherRatePct}%`
+      : 'Not applied to pension income',
+    property:
+      a.properties.length === 0
+        ? 'None'
+        : `${formatCurrency(propertyEquity(a))} of equity${
+            totalMortgageBalance(a) > 0
+              ? `, ${formatCurrency(totalMortgageBalance(a))} still owed`
+              : ''
+          }`,
+    inflation: `${a.inflationRate}% a year, everything in today's money`,
   }
 
   // Deleting the last property while looking at it would otherwise leave the
@@ -565,7 +618,7 @@ function App() {
             showInputs ? '' : 'hidden'
           }`}
         >
-          <InputSection title={`People (${a.people.length})`}>
+          <InputSection title={`People (${a.people.length})`} summary={sectionSummary.people}>
             <PeopleEditor
               people={a.people}
               inflationRate={a.inflationRate}
@@ -574,7 +627,11 @@ function App() {
             />
           </InputSection>
 
-          <InputSection title="Household spending">
+          <InputSection
+            title="Household spending"
+            summary={sectionSummary.spending}
+            defaultOpen={false}
+          >
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Enter regular costs monthly, then add yearly one-offs like holidays and renovations on
               top.
@@ -658,7 +715,8 @@ function App() {
 
           <InputSection
             title={`Spending changes (${a.spendingChanges.length})`}
-            defaultOpen={a.spendingChanges.length > 0}
+            summary={sectionSummary.spendingChanges}
+            defaultOpen={false}
           >
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Step spending up or down at set ages of {primary.name}.
@@ -674,7 +732,8 @@ function App() {
 
           <InputSection
             title={`One-off events (${a.oneOffEvents.length})`}
-            defaultOpen={a.oneOffEvents.length > 0}
+            summary={sectionSummary.oneOffs}
+            defaultOpen={false}
           >
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Lump sums that happen once — an inheritance or windfall coming in, a gift or a
@@ -691,11 +750,19 @@ function App() {
             />
           </InputSection>
 
-          <InputSection title={`Savings pots (${a.pots.length})`}>
+          <InputSection
+            title={`Savings pots (${a.pots.length})`}
+            summary={sectionSummary.pots}
+            defaultOpen={false}
+          >
             <PotsEditor assumptions={a} onChange={(pots) => update('pots', pots)} />
           </InputSection>
 
-          <InputSection title="Drawdown order">
+          <InputSection
+            title="Drawdown order"
+            summary={sectionSummary.drawdown}
+            defaultOpen={false}
+          >
             <DrawdownOrder
               assumptions={a}
               onStrategyChange={(strategy) => update('drawdownStrategy', strategy)}
@@ -712,7 +779,7 @@ function App() {
             />
           </InputSection>
 
-          <InputSection title="Income tax" defaultOpen={false}>
+          <InputSection title="Income tax" summary={sectionSummary.tax} defaultOpen={false}>
             <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <input
                 type="checkbox"
@@ -773,7 +840,11 @@ function App() {
             </p>
           </InputSection>
 
-          <InputSection title={`Property (${a.properties.length})`}>
+          <InputSection
+            title={`Property (${a.properties.length})`}
+            summary={sectionSummary.property}
+            defaultOpen={false}
+          >
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Homes and other property, with the mortgage on each. Property is wealth, not
               income — the only way it becomes spendable is selling, so a sale or a downsize
@@ -788,7 +859,11 @@ function App() {
             />
           </InputSection>
 
-          <InputSection title="Inflation & today's money">
+          <InputSection
+            title="Inflation &amp; today's money"
+            summary={sectionSummary.inflation}
+            defaultOpen={false}
+          >
             <SliderField
               label="Inflation"
               value={a.inflationRate}

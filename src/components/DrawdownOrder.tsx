@@ -22,6 +22,13 @@ export function DrawdownOrder({
   onApply,
 }: DrawdownOrderProps) {
   const resolved = resolveDrawdownOrder(a, a.drawdownOrder)
+  /*
+   * Whether anyone has actually arranged this list. The app ships drawing
+   * proportionally, so a flat "this order is not being used" warning fired at
+   * every new visitor about an order they had never touched. It is only worth
+   * flagging once the order differs from the one the app made up.
+   */
+  const arranged = resolved.join() !== allSourceIds(a).join()
   const [goal, setGoal] = useState<DrawdownGoal>('mostLeft')
   /*
    * The search runs on a button rather than with the rest of the projection.
@@ -93,10 +100,15 @@ export function DrawdownOrder({
             Drawn from top to bottom. A pot that's still locked is skipped until it unlocks.
             Salary-based pensions never appear here — they pay an income, not a pot.
           </p>
-        ) : (
+        ) : arranged ? (
           <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-            This order is <strong>not being used</strong> — every unlocked pot is drawn on at once.
-            Choose "Use pots in a set order" above to apply it.
+            The order you have set is <strong>not being used</strong> — every unlocked pot is drawn
+            on at once. Choose "Use pots in a set order" above to apply it.
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Not in use while pots are drawn on together. Choose "Use pots in a set order" above to
+            draw them one at a time, in this order.
           </p>
         )}
         <div className={strategy === 'priority' ? '' : 'pointer-events-none opacity-40'}>
