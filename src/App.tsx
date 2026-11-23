@@ -700,6 +700,15 @@ function App() {
               assumptions={a}
               onStrategyChange={(strategy) => update('drawdownStrategy', strategy)}
               onOrderChange={(order) => update('drawdownOrder', order)}
+              onApply={(strategy, order) =>
+                replaceAll({
+                  ...a,
+                  drawdownStrategy: strategy,
+                  // Proportional drawdown ignores the order, so leave the one
+                  // that is set alone rather than blanking it.
+                  drawdownOrder: order.length > 0 ? order : a.drawdownOrder,
+                })
+              }
             />
           </InputSection>
 
