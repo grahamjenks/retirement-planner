@@ -2,12 +2,26 @@ import { useState, type ReactNode } from 'react'
 
 interface InputSectionProps {
   title: string
+  /**
+   * What is inside, in a line, shown while the section is shut.
+   *
+   * Most sections start shut, so without this the sidebar would be nine
+   * closed drawers and no way to tell which one holds the figure you came
+   * to change.
+   */
+  summary?: ReactNode
   icon?: ReactNode
   defaultOpen?: boolean
   children: ReactNode
 }
 
-export function InputSection({ title, icon, defaultOpen = true, children }: InputSectionProps) {
+export function InputSection({
+  title,
+  summary,
+  icon,
+  defaultOpen = true,
+  children,
+}: InputSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
@@ -15,14 +29,22 @@ export function InputSection({ title, icon, defaultOpen = true, children }: Inpu
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left"
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-          {icon}
-          {title}
+        <span className="min-w-0">
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+            {icon}
+            {title}
+          </span>
+          {!open && summary && (
+            <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
+              {summary}
+            </span>
+          )}
         </span>
         <svg
-          className={`h-4 w-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"

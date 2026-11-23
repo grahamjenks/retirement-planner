@@ -11,6 +11,7 @@ import {
 import type { Assumptions, Person } from '../lib/types'
 import { NO_CONTRIBUTION_LIMIT, newId, potPresets } from '../lib/storage'
 import type { SavingsPot } from '../lib/types'
+import { AgeRule, type AgeRuleMode } from './AgeRule'
 import { ContributionSchedule } from './ContributionSchedule'
 import { NumberField } from './NumberField'
 import { POT_COLORS } from './chartColors'
@@ -138,6 +139,17 @@ function PotCard({
   // duplicate of what is already being paid, should not claim the pot varies.
   const liveSteps = schedule.filter((step) => step.fromAge < endAge)
   const [showSchedule, setShowSchedule] = useState(liveSteps.length > 0)
+
+  const accessMode: AgeRuleMode = pot.accessAtRetirement
+    ? 'retirement'
+    : pot.accessibleFromAge > 0
+      ? 'age'
+      : 'open'
+  const contributionMode: AgeRuleMode = pot.contributionEndsAtRetirement
+    ? 'retirement'
+    : pot.contributionEndAge < NO_CONTRIBUTION_LIMIT
+      ? 'age'
+      : 'open'
   // The same mechanic carries a LISA's government bonus and a SIPP's
   // basic-rate relief, so only the wording changes between them.
   const isPension = pot.kind === 'pension'
@@ -236,44 +248,42 @@ function PotCard({
           max={15}
           hint={`${realGrowthPct.toFixed(2)}% real`}
         />
-        <NumberField
-          label="Access from age"
-          value={accessAge}
-          onChange={(v) => onChange({ accessibleFromAge: v })}
-          min={0}
-          max={80}
-          disabled={pot.accessAtRetirement}
-        />
       </div>
 
-      <FollowRetirementToggle
-        label="Use my retirement age"
-        checked={pot.accessAtRetirement}
+      <AgeRule
+        label="Can be drawn on"
+        openLabel="Any time"
+        mode={accessMode}
+        age={pot.accessibleFromAge}
         retirementAge={retirementAge}
-        onChange={(v) => onChange({ accessAtRetirement: v })}
+        defaultAge={retirementAge}
+        max={90}
+        hint={locked ? `Locked until ${accessAge}.` : undefined}
+        onChange={(mode, age) =>
+          onChange({
+            accessAtRetirement: mode === 'retirement',
+            accessibleFromAge: mode === 'age' ? age : 0,
+          })
+        }
       />
 
-      <div className="mt-3">
-        <NumberField
-          label="Stop contributing at age"
-          value={endAge}
-          onChange={(v) => onChange({ contributionEndAge: v })}
-          min={0}
-          max={NO_CONTRIBUTION_LIMIT}
-          disabled={pot.contributionEndsAtRetirement}
-          hint={
-            contributionsCapped
-              ? `Contributions stop at ${endAge}.`
-              : `No age limit — set below ${NO_CONTRIBUTION_LIMIT} to add one.`
-          }
-        />
-      </div>
-
-      <FollowRetirementToggle
-        label="Use my retirement age"
-        checked={pot.contributionEndsAtRetirement}
+      <AgeRule
+        label="Paying in stops"
+        openLabel="Never"
+        mode={contributionMode}
+        age={pot.contributionEndAge}
         retirementAge={retirementAge}
-        onChange={(v) => onChange({ contributionEndsAtRetirement: v })}
+        defaultAge={retirementAge}
+        max={NO_CONTRIBUTION_LIMIT - 1}
+        hint={contributionsCapped ? `Contributions stop at ${endAge}.` : undefined}
+        onChange={(mode, age) =>
+          onChange({
+            contributionEndsAtRetirement: mode === 'retirement',
+            // "Never" is the sentinel the projection reads; it is no longer a
+            // number anyone has to know about or type.
+            contributionEndAge: mode === 'age' ? age : NO_CONTRIBUTION_LIMIT,
+          })
+        }
       />
 
       {showSchedule && (
@@ -383,31 +393,3 @@ function PotCard({
   )
 }
 
-interface FollowRetirementToggleProps {
-  label: string
-  checked: boolean
-  retirementAge: number
-  onChange: (checked: boolean) => void
-}
-
-/** Ties a pot's access or contribution-end age to the retirement age. */
-function FollowRetirementToggle({
-  label,
-  checked,
-  retirementAge,
-  onChange,
-}: FollowRetirementToggleProps) {
-  return (
-    <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-slate-300 accent-ink-600 dark:border-slate-600"
-      />
-      <span>
-        {label} <span className="text-slate-400">({retirementAge})</span>
-      </span>
-    </label>
-  )
-}
