@@ -193,13 +193,40 @@ function PotCard({
           prefix="£"
           step={500}
         />
-        <NumberField
-          label={liveSteps.length > 0 ? 'Per year, to start' : 'Per year'}
-          value={pot.annualContribution}
-          onChange={(v) => onChange({ annualContribution: v })}
-          prefix="£"
-          step={250}
-        />
+        <div>
+          <NumberField
+            label={liveSteps.length > 0 ? 'Per year, to start' : 'Per year'}
+            value={pot.annualContribution}
+            onChange={(v) => onChange({ annualContribution: v })}
+            prefix="£"
+            step={250}
+          />
+          {/*
+            Directly under the amount it changes, and a control rather than a
+            faint link: this used to sit at the bottom of the card below two
+            unrelated checkboxes, where nobody found it.
+          */}
+          <button
+            type="button"
+            onClick={() => setShowSchedule((v) => !v)}
+            aria-expanded={showSchedule}
+            className={`mt-1.5 flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition-colors ${
+              showSchedule || liveSteps.length > 0
+                ? 'border-ink-300 bg-ink-50 text-ink-700 hover:bg-ink-100 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-300'
+                : 'border-slate-300 text-slate-600 hover:border-ink-400 hover:text-ink-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-ink-500 dark:hover:text-ink-400'
+            }`}
+          >
+            {showSchedule ? 'Done' : 'Vary by year'}
+            <svg
+              className={`h-3 w-3 transition-transform ${showSchedule ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
         <NumberField
           label="Growth %"
           value={pot.growthRate}
@@ -248,6 +275,21 @@ function PotCard({
         retirementAge={retirementAge}
         onChange={(v) => onChange({ contributionEndsAtRetirement: v })}
       />
+
+      {showSchedule && (
+        <div className="mt-3 rounded-lg border border-ink-200 bg-ink-50/40 p-2.5 dark:border-ink-800 dark:bg-ink-950/30">
+          <ContributionSchedule
+            pot={pot}
+            baseAmount={pot.annualContribution}
+            ownerName={owner.name}
+            currentAge={currentAge}
+            endAge={endAge}
+            retirementAge={retirementAge}
+            steps={schedule}
+            onChange={(steps) => onChange({ contributionSchedule: steps })}
+          />
+        </div>
+      )}
 
       {(locked ||
         bonus > 0 ||
@@ -308,27 +350,6 @@ function PotCard({
               +{formatCurrency(bonus)} {topUpWord}/yr
             </span>
           )}
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setShowSchedule((v) => !v)}
-        className="mt-2 block text-xs text-slate-400 hover:text-ink-600 dark:hover:text-ink-400"
-      >
-        {showSchedule ? 'Hide' : 'Change'} what goes in, by age
-      </button>
-
-      {showSchedule && (
-        <div className="mt-2">
-          <ContributionSchedule
-            baseAmount={pot.annualContribution}
-            ownerName={owner.name}
-            currentAge={currentAge}
-            endAge={endAge}
-            steps={schedule}
-            onChange={(steps) => onChange({ contributionSchedule: steps })}
-          />
         </div>
       )}
 
