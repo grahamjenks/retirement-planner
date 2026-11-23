@@ -6,6 +6,7 @@ import type {
   DrawdownStrategy,
   OneOffEvent,
   PensionType,
+  ContributionStep,
   Person,
   Property,
   SavingsPot,
@@ -38,6 +39,7 @@ const MAX_PROPERTIES = 20
 const MAX_SPENDING_CHANGES = 50
 const MAX_ONE_OFF_EVENTS = 50
 const MAX_DB_SCHEMES = 10
+const MAX_CONTRIBUTION_STEPS = 20
 const MAX_NAME = 60
 
 /** A name from untrusted input: a string, non-empty, and a sane length. */
@@ -177,6 +179,7 @@ export interface PotPreset {
 const basePot = {
   kind: 'savings' as const,
   balance: 0,
+  contributionSchedule: [] as ContributionStep[],
   annualContribution: 0,
   accessibleFromAge: 0,
   accessAtRetirement: false,
@@ -368,6 +371,9 @@ function coercePot(raw: unknown, index: number, ownerFallback: string): SavingsP
     accessAtRetirement: p.accessAtRetirement === true,
     bonusRatePct: rate(p.bonusRatePct, base.bonusRatePct),
     bonusCapAnnual: num(p.bonusCapAnnual, base.bonusCapAnnual),
+    contributionSchedule: Array.isArray(p.contributionSchedule)
+      ? p.contributionSchedule.slice(0, MAX_CONTRIBUTION_STEPS).map(coerceContributionStep)
+      : [],
     contributionEndAge: age(p.contributionEndAge, base.contributionEndAge),
     contributionEndsAtRetirement: p.contributionEndsAtRetirement === true,
     ownerId: typeof p.ownerId === 'string' && p.ownerId ? p.ownerId : ownerFallback,
@@ -416,6 +422,15 @@ function coerceProperty(raw: unknown, index: number, ownerFallback: string): Pro
     proceedsTargetId:
       typeof pr.proceedsTargetId === 'string' ? pr.proceedsTargetId.slice(0, MAX_NAME) : '',
     ownerId: typeof pr.ownerId === 'string' && pr.ownerId ? pr.ownerId : ownerFallback,
+  }
+}
+
+function coerceContributionStep(raw: unknown, index: number): ContributionStep {
+  const c = (raw ?? {}) as Partial<ContributionStep>
+  return {
+    id: typeof c.id === 'string' && c.id ? c.id : `step-${index}-${newId()}`,
+    fromAge: age(c.fromAge, 0),
+    amount: Math.max(0, num(c.amount, 0)),
   }
 }
 

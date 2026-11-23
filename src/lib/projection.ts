@@ -106,8 +106,30 @@ export function spendingAtAge(a: Assumptions, age: number): number {
 }
 
 /**
- * The amount landing in a pot this year, including any government bonus
- * (e.g. a LISA's 25% top-up on the first £4,000).
+ * What is being paid into a pot at a given age, before any bonus or relief —
+ * the base amount, or the latest scheduled step that has come into effect.
+ *
+ * Deliberately a single pass that keeps the latest qualifying step rather
+ * than sorting: this runs for every pot in every year, and the whole loop
+ * runs again for each retirement search and each Monte Carlo trial, so a
+ * sort per call would be thousands of them. It also means the stored order
+ * of the steps does not matter.
+ */
+export function contributionAmountAt(pot: SavingsPot, ownerAge: number): number {
+  let amount = Math.max(0, pot.annualContribution)
+  let latest = -Infinity
+  for (const step of pot.contributionSchedule) {
+    if (ownerAge >= step.fromAge && step.fromAge >= latest) {
+      latest = step.fromAge
+      amount = Math.max(0, step.amount)
+    }
+  }
+  return amount
+}
+
+/**
+ * The amount landing in a pot this year, including any government bonus or
+ * tax relief (a LISA's 25% top-up on the first £4,000, a SIPP's relief).
  */
 export function potContributionAt(
   pot: SavingsPot,
@@ -116,7 +138,7 @@ export function potContributionAt(
   ownerRetirementAge: number,
 ): number {
   if (ownerRetired || ownerAge >= effectiveContributionEndAge(pot, ownerRetirementAge)) return 0
-  const contribution = Math.max(0, pot.annualContribution)
+  const contribution = contributionAmountAt(pot, ownerAge)
   const bonusable = Math.min(contribution, Math.max(0, pot.bonusCapAnnual))
   return contribution + bonusable * (Math.max(0, pot.bonusRatePct) / 100)
 }

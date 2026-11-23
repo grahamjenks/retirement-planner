@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { formatCurrency } from '../lib/format'
 import {
+  contributionAmountAt,
   effectiveAccessAge,
   effectiveContributionEndAge,
   potContributionAt,
@@ -10,6 +11,7 @@ import {
 import type { Assumptions, Person } from '../lib/types'
 import { NO_CONTRIBUTION_LIMIT, newId, potPresets } from '../lib/storage'
 import type { SavingsPot } from '../lib/types'
+import { ContributionSchedule } from './ContributionSchedule'
 import { NumberField } from './NumberField'
 import { POT_COLORS } from './chartColors'
 
@@ -128,9 +130,14 @@ function PotCard({
   const endAge = effectiveContributionEndAge(pot, retirementAge)
   const locked = accessAge > currentAge
   const grossContribution = potContributionAt(pot, currentAge, false, retirementAge)
-  const bonus = grossContribution - pot.annualContribution
+  const bonus = grossContribution - contributionAmountAt(pot, currentAge)
   const contributionsCapped = endAge < NO_CONTRIBUTION_LIMIT
   const contributionsEnded = currentAge >= endAge
+  const schedule = pot.contributionSchedule
+  // Steps that will actually come into effect — one past the stop age, or a
+  // duplicate of what is already being paid, should not claim the pot varies.
+  const liveSteps = schedule.filter((step) => step.fromAge < endAge)
+  const [showSchedule, setShowSchedule] = useState(liveSteps.length > 0)
   // The same mechanic carries a LISA's government bonus and a SIPP's
   // basic-rate relief, so only the wording changes between them.
   const isPension = pot.kind === 'pension'
@@ -187,7 +194,7 @@ function PotCard({
           step={500}
         />
         <NumberField
-          label="Per year"
+          label={liveSteps.length > 0 ? 'Per year, to start' : 'Per year'}
           value={pot.annualContribution}
           onChange={(v) => onChange({ annualContribution: v })}
           prefix="£"
@@ -242,7 +249,11 @@ function PotCard({
         onChange={(v) => onChange({ contributionEndsAtRetirement: v })}
       />
 
-      {(locked || bonus > 0 || contributionsCapped || drawdownPosition) && (
+      {(locked ||
+        bonus > 0 ||
+        contributionsCapped ||
+        drawdownPosition ||
+        liveSteps.length > 0) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {drawdownPosition ? (
             <span
@@ -265,6 +276,26 @@ function PotCard({
               Pension — taxed on withdrawal
             </span>
           )}
+          {liveSteps.length > 0 && (
+            <span
+              className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+              title={liveSteps
+                .slice()
+                .sort((x, y) => x.fromAge - y.fromAge)
+                .map((step) =>
+                  step.amount === 0
+                    ? `Paused at ${step.fromAge}`
+                    : `${formatCurrency(step.amount)} from ${step.fromAge}`,
+                )
+                .join(' · ')}
+            >
+              Changes at{' '}
+              {liveSteps
+                .map((step) => step.fromAge)
+                .sort((x, y) => x - y)
+                .join(', ')}
+            </span>
+          )}
           {contributionsCapped && (
             <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
               {contributionsEnded
@@ -277,6 +308,27 @@ function PotCard({
               +{formatCurrency(bonus)} {topUpWord}/yr
             </span>
           )}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setShowSchedule((v) => !v)}
+        className="mt-2 block text-xs text-slate-400 hover:text-ink-600 dark:hover:text-ink-400"
+      >
+        {showSchedule ? 'Hide' : 'Change'} what goes in, by age
+      </button>
+
+      {showSchedule && (
+        <div className="mt-2">
+          <ContributionSchedule
+            baseAmount={pot.annualContribution}
+            ownerName={owner.name}
+            currentAge={currentAge}
+            endAge={endAge}
+            steps={schedule}
+            onChange={(steps) => onChange({ contributionSchedule: steps })}
+          />
         </div>
       )}
 

@@ -7,6 +7,19 @@
  */
 export type PotKind = 'savings' | 'pension'
 
+/**
+ * A step in a pot's contribution schedule: pay in this much a year, from this
+ * age of the pot's owner onwards, until a later step says otherwise.
+ *
+ * An amount of 0 is a pause, not an end — contributions resume at the next
+ * step. Stopping for good is what `contributionEndAge` is for.
+ */
+export interface ContributionStep {
+  id: string
+  fromAge: number
+  amount: number
+}
+
 export interface SavingsPot {
   id: string
   name: string
@@ -35,6 +48,16 @@ export interface SavingsPot {
    * at `NO_BONUS_CAP`.
    */
   bonusCapAnnual: number
+  /**
+   * Changes to `annualContribution` at set ages, in the same shape as the
+   * household's spending changes: the base amount applies until the first
+   * step, then each step replaces it from its age on.
+   *
+   * This is also how a pot that is not being paid into *yet* is expressed —
+   * a base amount of 0 and a step at the age the payments start — so there is
+   * no separate start age to keep in step with this list.
+   */
+  contributionSchedule: ContributionStep[]
   /** Age at which contributions must stop, e.g. 50 for a LISA. */
   contributionEndAge: number
   /** When true, `contributionEndAge` is ignored and tracks the retirement age. */
