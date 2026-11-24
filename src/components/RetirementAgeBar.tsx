@@ -38,9 +38,11 @@ export function RetirementAgeBar({ people, onChange }: RetirementAgeBarProps) {
               key={person.id}
               className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:flex-1"
             >
-              <span className="shrink-0 text-sm font-medium text-slate-700 dark:text-slate-200">
-                {person.name}
-              </span>
+              {people.length > 1 && (
+                <span className="shrink-0 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {person.name}
+                </span>
+              )}
               <div className="flex shrink-0 items-center overflow-hidden rounded-lg border border-slate-300 dark:border-slate-600">
                 <button
                   type="button"

@@ -110,7 +110,7 @@ export function SpendingSummary({ assumptions: a, rows }: SpendingSummaryProps) 
                   key={p.id}
                   className="px-3 py-2 text-left font-semibold whitespace-nowrap"
                 >
-                  {p.name}
+                  {a.people.length > 1 ? p.name : 'Age'}
                 </th>
               ))}
               <th className="border-l border-slate-200 px-3 py-2 text-left font-semibold whitespace-nowrap dark:border-slate-600">

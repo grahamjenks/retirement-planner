@@ -20,6 +20,8 @@ import { YearAgeTick } from './YearAxisTick'
 import { CompareNote } from './CompareNote'
 import { ghostLine } from './chartCompare'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
+import { ChartFigure } from './ChartFigure'
+import { condense, describeMoneySeries } from './chartSummary'
 
 interface MonteCarloChartProps {
   assumptions: Assumptions
@@ -87,6 +89,23 @@ function MonteCarloChartBase({ assumptions: a, compare }: MonteCarloChartProps) 
       : null
 
   return (
+    <ChartFigure
+      title="Range of outcomes across random return sequences"
+      summary={`${(result.successRate * 100).toFixed(0)}% of ${trials} runs funded the whole plan. ${describeMoneySeries(
+        result.bands.map((band) => ({ label: String(band.year), value: band.p50 })),
+        'The median run',
+      )}`}
+      rows={condense(result.bands)}
+      columns={[
+        { label: 'Year', value: (band) => String(band.year) },
+        { label: 'Age', value: (band) => String(band.age) },
+        { label: 'Worst tenth', value: (band) => formatCurrency(band.p10) },
+        { label: 'Lower quarter', value: (band) => formatCurrency(band.p25) },
+        { label: 'Median', value: (band) => formatCurrency(band.p50) },
+        { label: 'Upper quarter', value: (band) => formatCurrency(band.p75) },
+        { label: 'Best tenth', value: (band) => formatCurrency(band.p90) },
+      ]}
+    >
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">If returns don't arrive smoothly</h2>
@@ -230,6 +249,7 @@ function MonteCarloChartBase({ assumptions: a, compare }: MonteCarloChartProps) 
         for a cash-heavy mix.
       </p>
     </div>
+    </ChartFigure>
   )
 }
 

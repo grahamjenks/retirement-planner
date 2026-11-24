@@ -19,6 +19,8 @@ import { YearAgeTick } from './YearAxisTick'
 import { CompareNote } from './CompareNote'
 import { COMPARE_INK, ghostLine, rowsByYear, type ChartCompare } from './chartCompare'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
+import { ChartFigure } from './ChartFigure'
+import { condense, describeMoneySeries } from './chartSummary'
 
 interface ContributionsChartProps {
   assumptions: Assumptions
@@ -76,6 +78,26 @@ function ContributionsChartBase({ assumptions: a, rows, compare }: Contributions
   })
 
   return (
+    <ChartFigure
+      title="What goes into the pots each year"
+      summary={describeMoneySeries(
+        visible.map((r) => ({ label: String(r.year), value: r.potContributionsTotal })),
+        'Total paid in',
+      )}
+      rows={condense(visible)}
+      columns={[
+        { label: 'Year', value: (r) => String(r.year) },
+        {
+          label: a.people.length > 1 ? 'Ages' : 'Age',
+          value: (r) => r.people.map((x) => personAge(x.name, x.age, a.people.length)).join(', '),
+        },
+        ...a.pots.map((pot, i) => ({
+          label: pot.name,
+          value: (r: YearRow) => formatCurrency(r.potContributions[i] ?? 0),
+        })),
+        { label: 'Total', value: (r) => formatCurrency(r.potContributionsTotal) },
+      ]}
+    >
     <div className="w-full">
       {stopsEarly && (
         <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-400">
@@ -165,6 +187,7 @@ function ContributionsChartBase({ assumptions: a, rows, compare }: Contributions
       </div>
       {compare && <CompareNote name={compare.name} of="what it puts away each year in total" />}
     </div>
+    </ChartFigure>
   )
 }
 

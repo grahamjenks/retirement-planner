@@ -14,6 +14,7 @@ import { planHeadroom, sensitivity } from '../lib/analysis'
 import { formatCurrency, formatCurrencyCompact } from '../lib/format'
 import type { Assumptions } from '../lib/types'
 import { ALERT_COLOR } from './chartColors'
+import { ChartFigure } from './ChartFigure'
 
 interface SensitivityChartProps {
   assumptions: Assumptions
@@ -37,6 +38,23 @@ function SensitivityChartBase({ assumptions: a }: SensitivityChartProps) {
   }))
 
   return (
+    <ChartFigure
+      title="What moves the plan most"
+      summary={
+        factors.length > 0
+          ? `Ranked by how far the outcome moves between the two ends of each assumption. ${factors[0].label} matters most: ${factors[0].lowLabel} and ${factors[0].highLabel} put the plan ${formatCurrency(Math.abs(factors[0].highHeadroom - factors[0].lowHeadroom))} apart.`
+          : 'Nothing to compare.'
+      }
+      rows={factors}
+      columns={[
+        { label: 'Assumption', value: (f) => f.label },
+        { label: 'Low end', value: (f) => f.lowLabel },
+        { label: 'Plan at the low end', value: (f) => formatCurrency(f.lowHeadroom) },
+        { label: 'High end', value: (f) => f.highLabel },
+        { label: 'Plan at the high end', value: (f) => formatCurrency(f.highHeadroom) },
+        { label: 'Swing', value: (f) => formatCurrency(Math.abs(f.swing)) },
+      ]}
+    >
     <div>
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
         Each assumption moved to either end of a plausible range, one at a time, with everything
@@ -91,6 +109,7 @@ function SensitivityChartBase({ assumptions: a }: SensitivityChartProps) {
         rarely arrives alone, so treat these as the sensitivity of each lever, not a worst case.
       </p>
     </div>
+    </ChartFigure>
   )
 }
 

@@ -16,6 +16,7 @@ import type { Assumptions } from '../lib/types'
 import { ALERT_COLOR, PENSION_COLORS } from './chartColors'
 import { CompareNote } from './CompareNote'
 import { ghostLine } from './chartCompare'
+import { ChartFigure } from './ChartFigure'
 
 interface TradeoffChartProps {
   assumptions: Assumptions
@@ -71,6 +72,27 @@ function TradeoffChartBase({ assumptions: a, compare }: TradeoffChartProps) {
   })
 
   return (
+    <ChartFigure
+      title={`What each retirement age costs${a.people.length > 1 ? ` for ${person.name}` : ''}`}
+      summary={
+        points.length > 0
+          ? `Each point re-runs the whole plan with retirement at that age. Retiring at ${points[0].retirementAge} leaves ${formatCurrency(points[0].finalPot)}; at ${points[points.length - 1].retirementAge}, ${formatCurrency(points[points.length - 1].finalPot)}.`
+          : 'Nothing to compare.'
+      }
+      rows={points}
+      columns={[
+        { label: 'Retirement age', value: (pt) => String(pt.retirementAge) },
+        {
+          label: 'Pots run dry',
+          value: (pt) => (pt.runsDryAge === null ? 'Never' : `age ${pt.runsDryAge}`),
+        },
+        { label: 'Left at the end', value: (pt) => formatCurrency(pt.finalPot) },
+        {
+          label: 'Funds the plan',
+          value: (pt) => (pt.sustainable ? 'Yes' : 'No'),
+        },
+      ]}
+    >
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Cost of retiring earlier</h2>
@@ -251,6 +273,7 @@ function TradeoffChartBase({ assumptions: a, compare }: TradeoffChartProps) {
         <CompareNote name={compare.name} of="its own retirement age, and the same two curves" dash="1 3" />
       )}
     </div>
+    </ChartFigure>
   )
 }
 
