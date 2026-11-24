@@ -1,4 +1,4 @@
-import { contributionAmountAt } from './projection'
+import { amountFromSchedule } from './projection'
 import { MAX_CONTRIBUTION_STEPS, newId } from './storage'
 import type { ContributionStep, SavingsPot } from './types'
 
@@ -32,6 +32,27 @@ export function contributionWindow(
   return { from: currentAge, to: Math.min(endAge, retirementAge) }
 }
 
+/**
+ * The same view for anything that has a headline amount and a step list — a
+ * savings pot, or a person's pension contributions, where the amount is a
+ * percentage of salary rather than a sum of money.
+ */
+export function scheduleYears(
+  base: number,
+  steps: readonly ContributionStep[],
+  currentAge: number,
+  endAge: number,
+  retirementAge: number,
+): ContributionYear[] {
+  const to = Math.min(endAge, retirementAge)
+  const years: ContributionYear[] = []
+  for (let age = currentAge; age < to; age++) {
+    const amount = amountFromSchedule(base, steps, age)
+    years.push({ age, amount, paying: amount > 0 })
+  }
+  return years
+}
+
 export function contributionYears(
   pot: SavingsPot,
   currentAge: number,
@@ -39,12 +60,7 @@ export function contributionYears(
   retirementAge: number,
 ): ContributionYear[] {
   const { from, to } = contributionWindow(pot, currentAge, endAge, retirementAge)
-  const years: ContributionYear[] = []
-  for (let age = from; age < to; age++) {
-    const amount = contributionAmountAt(pot, age)
-    years.push({ age, amount, paying: amount > 0 })
-  }
-  return years
+  return scheduleYears(pot.annualContribution, pot.contributionSchedule, from, to, to)
 }
 
 /**

@@ -6,6 +6,8 @@ import type { DbScheme, Person } from '../lib/types'
 import type { TaxSettings } from '../lib/tax'
 import { NumberField } from './NumberField'
 import { SliderField } from './SliderField'
+import { ContributionSchedule } from './ContributionSchedule'
+import { scheduleYears } from '../lib/contributionSchedule'
 
 interface PeopleEditorProps {
   people: Person[]
@@ -34,6 +36,7 @@ export function PeopleEditor({ people, inflationRate, tax, onChange }: PeopleEdi
         <PersonCard
           key={person.id}
           person={person}
+          soleOwner={people.length <= 1}
           inflationRate={inflationRate}
           tax={tax}
           canRemove={people.length > 1 && i > 0}
@@ -58,6 +61,8 @@ export function PeopleEditor({ people, inflationRate, tax, onChange }: PeopleEdi
 
 interface PersonCardProps {
   person: Person
+  /** True when this is the only person, so a name adds nothing to a label. */
+  soleOwner: boolean
   inflationRate: number
   tax: TaxSettings
   canRemove: boolean
@@ -68,6 +73,7 @@ interface PersonCardProps {
 
 function PersonCard({
   person,
+  soleOwner,
   inflationRate,
   tax,
   canRemove,
@@ -79,6 +85,21 @@ function PersonCard({
   const estimate = takeHomeEstimateFor(person, tax)
   const [open, setOpen] = useState(defaultOpen)
   const [pensionOpen, setPensionOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+
+  // Contributions can only happen while this person is working, so the grid
+  // runs from today to the year they retire.
+  const headlinePct = person.employeePensionPct + person.employerPensionPct
+  const pensionYears = scheduleYears(
+    headlinePct,
+    person.pensionSchedule,
+    person.currentAge,
+    person.retirementAge,
+    person.retirementAge,
+  )
+  const livePensionSteps = person.pensionSchedule.filter(
+    (step) => step.fromAge < person.retirementAge,
+  )
 
   // A closed section still has to say what is inside it, or collapsing just
   // hides the numbers you came to check.
@@ -319,16 +340,72 @@ function PersonCard({
             />
           </div>
           <p className="rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-            {person.employeePensionPct + person.employerPensionPct}% of{' '}
-            {formatCurrency(person.currentAnnualIncome)} ={' '}
+            {headlinePct}% of {formatCurrency(person.currentAnnualIncome)} ={' '}
             <strong>
-              {formatCurrency(
-                person.currentAnnualIncome *
-                  ((person.employeePensionPct + person.employerPensionPct) / 100),
-              )}
+              {formatCurrency(person.currentAnnualIncome * (headlinePct / 100))}
             </strong>{' '}
             a year, rising with salary.
+            {livePensionSteps.length > 0 && (
+              <> Changes at {livePensionSteps.map((s) => s.fromAge).sort((x, y) => x - y).join(', ')}.</>
+            )}
           </p>
+
+          {/*
+            The same control a savings pot has, in the same place relative to
+            the amount it changes: a pension is the one contribution most
+            people pause — a career break, a drop to part-time — and until now
+            it was the one contribution that could not be.
+          */}
+          <button
+            type="button"
+            onClick={() => setScheduleOpen((v) => !v)}
+            aria-expanded={scheduleOpen}
+            className={`flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition-colors ${
+              scheduleOpen || livePensionSteps.length > 0
+                ? 'border-ink-300 bg-ink-50 text-ink-700 hover:bg-ink-100 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-300'
+                : 'border-slate-300 text-slate-600 hover:border-ink-400 hover:text-ink-600 dark:border-slate-600 dark:text-slate-300 dark:hover:border-ink-500 dark:hover:text-ink-400'
+            }`}
+          >
+            {scheduleOpen ? 'Done' : 'Vary by year'}
+            <svg
+              className={`h-3 w-3 transition-transform ${scheduleOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {scheduleOpen && (
+            <div className="rounded-lg border border-ink-200 bg-ink-50/40 p-2.5 dark:border-ink-800 dark:bg-ink-950/30">
+              <ContributionSchedule
+                years={pensionYears}
+                baseAmount={headlinePct}
+                formatAmount={(pct) => `${Math.round(pct * 10) / 10}% of salary`}
+                amountLabel="Pay in"
+                // Empty, not undefined: a default parameter would put the
+                // pound sign back and the field would read "£ 0 %".
+                amountPrefix=""
+                amountSuffix="%"
+                amountStep={0.5}
+                // formatAmount already says "of salary"; saying it twice gave
+                // "10% of salary of salary".
+                perYearNoun=""
+                ownerName={person.name}
+                soleOwner={soleOwner}
+                currentAge={person.currentAge}
+                endAge={person.retirementAge}
+                retirementAge={person.retirementAge}
+                steps={person.pensionSchedule}
+                onChange={(steps) => onChange({ pensionSchedule: steps })}
+              />
+              <p className="mt-2 text-xs text-slate-400">
+                Employee and employer together. The split between them keeps the ratio above, so
+                a year at half the rate halves both.
+              </p>
+            </div>
+          )}
           <SliderField
             label="Expected growth"
             value={person.pensionGrowthRate}

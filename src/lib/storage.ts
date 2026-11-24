@@ -85,6 +85,7 @@ export function makePerson(overrides: Partial<Person> = {}): Person {
     currentPensionPot: 0,
     employeePensionPct: 5,
     employerPensionPct: 5,
+    pensionSchedule: [],
     pensionGrowthRate: 5,
     pensionAccessAge: 57,
     dbSchemes: [],
@@ -335,6 +336,9 @@ function coercePerson(raw: unknown, index: number): Person {
     currentPensionPot: num(p.currentPensionPot, base.currentPensionPot),
     employeePensionPct: rate(p.employeePensionPct, base.employeePensionPct),
     employerPensionPct: rate(p.employerPensionPct, base.employerPensionPct),
+    pensionSchedule: Array.isArray(p.pensionSchedule)
+      ? p.pensionSchedule.slice(0, MAX_CONTRIBUTION_STEPS).map(coerceContributionStep)
+      : [],
     pensionGrowthRate: rate(p.pensionGrowthRate, base.pensionGrowthRate),
     pensionAccessAge: age(p.pensionAccessAge, base.pensionAccessAge),
     dbSchemes: Array.isArray(p.dbSchemes)
