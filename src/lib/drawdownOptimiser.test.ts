@@ -134,3 +134,54 @@ describe('on a household too big to enumerate', () => {
     expect(result.best.shortfallTotal).toBeLessThanOrEqual(result.current.shortfallTotal + 0.5)
   })
 })
+
+describe('with a general investment account in the mix', () => {
+  // Before the GIA was modelled as taxable it was byte-identical to the ISA,
+  // so swapping the two in the order changed nothing and the optimiser had
+  // nothing to say about them.
+  const giaPreset = potPresets.find((p) => p.label.startsWith('General investment'))
+  if (!giaPreset) throw new Error('no GIA preset')
+
+  const gia: SavingsPot = {
+    ...giaPreset.defaults,
+    id: 'gia',
+    ownerId: 'me',
+    balance: 200000,
+    costBasis: 50000, // three quarters of any sale is gain
+    annualContribution: 0,
+    accessibleFromAge: 0,
+    growthRate: 5,
+  } as SavingsPot
+
+  const withGia = (order: string[]): Assumptions =>
+    coerceAssumptions({
+      ...base,
+      people: [me],
+      pots: [isa, gia],
+      properties: [],
+      spendingChanges: [],
+      oneOffEvents: [],
+      retirementMonthly: 3000,
+      retirementAnnualExtras: 0,
+      tax: { ...base.tax, enabled: true },
+      drawdownStrategy: 'priority',
+      drawdownOrder: order,
+    })
+
+  it('is no longer interchangeable with the ISA in the order', () => {
+    const isaFirst = optimiseDrawdown(withGia(['isa', 'gia', 'pension:me']), 'leastTax').current
+    const giaFirst = optimiseDrawdown(withGia(['gia', 'isa', 'pension:me']), 'leastTax').current
+    expect(isaFirst.lifetimeTax).not.toBeCloseTo(giaFirst.lifetimeTax, 0)
+  })
+
+  it('still never recommends an order that pays more tax', () => {
+    const r = optimiseDrawdown(withGia(['isa', 'gia', 'pension:me']), 'leastTax')
+    expect(r.best.lifetimeTax).toBeLessThanOrEqual(r.current.lifetimeTax + 0.5)
+    expect(r.best.shortfallTotal).toBeLessThanOrEqual(r.current.shortfallTotal + 0.5)
+  })
+
+  it('still never recommends an order that leaves less behind', () => {
+    const r = optimiseDrawdown(withGia(['isa', 'gia', 'pension:me']), 'mostLeft')
+    expect(r.best.finalTotal).toBeGreaterThanOrEqual(r.current.finalTotal - 0.5)
+  })
+})

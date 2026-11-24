@@ -153,7 +153,13 @@ function PotCard({
   // The same mechanic carries a LISA's government bonus and a SIPP's
   // basic-rate relief, so only the wording changes between them.
   const isPension = pot.kind === 'pension'
+  const isTaxable = pot.kind === 'taxable'
   const topUpWord = isPension ? 'tax relief' : 'bonus'
+  const unrealisedGain = pot.balance - pot.costBasis
+  // A general investment account has no top-up mechanic, so the relief and
+  // bonus fields are noise on one — unless a figure is already stored there,
+  // in which case hiding the control would hide the data with it.
+  const showTopUp = !isTaxable || pot.bonusRatePct > 0 || pot.bonusCapAnnual > 0
 
   return (
     <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
@@ -201,10 +207,41 @@ function PotCard({
         <NumberField
           label="Balance"
           value={pot.balance}
-          onChange={(v) => onChange({ balance: v })}
+          onChange={(v) =>
+            onChange(
+              // While nobody has said what they paid, the base cost follows
+              // the balance, so a pot someone has only typed a balance into
+              // assumes no gain rather than claiming every penny is profit.
+              // Once the two differ, the figure they entered is left alone.
+              isTaxable && pot.costBasis === pot.balance
+                ? { balance: v, costBasis: v }
+                : { balance: v },
+            )
+          }
           prefix="£"
           step={500}
         />
+        {/*
+          Only an unwrapped pot has a gain to measure, and the gain is what
+          decides the tax when it is sold. Starts equal to the balance, so
+          leaving it alone assumes no gain yet rather than taxing a guess.
+        */}
+        {isTaxable && (
+          <NumberField
+            label="What you paid"
+            value={pot.costBasis}
+            onChange={(v) => onChange({ costBasis: v })}
+            prefix="£"
+            step={500}
+            hint={
+              unrealisedGain > 0
+                ? `${formatCurrency(unrealisedGain)} gain, taxable when sold`
+                : unrealisedGain < 0
+                  ? `${formatCurrency(-unrealisedGain)} down, so nothing to tax`
+                  : 'No gain yet'
+            }
+          />
+        )}
         <div>
           <NumberField
             label={liveSteps.length > 0 ? 'Per year, to start' : 'Per year'}
@@ -302,6 +339,8 @@ function PotCard({
       )}
 
       {(locked ||
+        isPension ||
+        isTaxable ||
         bonus > 0 ||
         contributionsCapped ||
         drawdownPosition ||
@@ -326,6 +365,14 @@ function PotCard({
               title="Taxed as pension income on the way out, with the usual tax-free share of each withdrawal"
             >
               Pension — taxed on withdrawal
+            </span>
+          )}
+          {isTaxable && (
+            <span
+              className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-700 dark:bg-ink-950 dark:text-ink-300"
+              title="Outside a tax wrapper: selling realises the gain on what is sold, and that gain is charged to capital gains tax above the annual exempt amount"
+            >
+              Taxable — CGT on gains
             </span>
           )}
           {liveSteps.length > 0 && (
@@ -363,15 +410,18 @@ function PotCard({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setShowAdvanced((s) => !s)}
-        className="mt-2 text-xs text-slate-400 hover:text-ink-600 dark:hover:text-ink-400"
-      >
-        {showAdvanced ? 'Hide' : 'Show'} {isPension ? 'tax relief' : 'government bonus'} settings
-      </button>
+      {showTopUp && (
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((s) => !s)}
+          className="mt-2 text-xs text-slate-400 hover:text-ink-600 dark:hover:text-ink-400"
+        >
+          {showAdvanced ? 'Hide' : 'Show'} {isPension ? 'tax relief' : 'government bonus'}{' '}
+          settings
+        </button>
+      )}
 
-      {showAdvanced && (
+      {showTopUp && showAdvanced && (
         <div className="mt-2 grid grid-cols-2 gap-3">
           <NumberField
             label={isPension ? 'Tax relief %' : 'Gov. bonus %'}

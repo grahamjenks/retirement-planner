@@ -5,7 +5,7 @@
  * separately — is funded before tax, so HMRC tops contributions up and takes
  * its share back on the way out.
  */
-export type PotKind = 'savings' | 'pension'
+export type PotKind = 'savings' | 'pension' | 'taxable'
 
 /**
  * A step in a pot's contribution schedule: pay in this much a year, from this
@@ -24,12 +24,28 @@ export interface SavingsPot {
   id: string
   name: string
   /**
-   * Pension pots are locked to `accessibleFromAge` like any other, but their
-   * withdrawals are taxed as pension income with the usual tax-free share,
-   * and `bonusRatePct` is tax relief rather than a government bonus.
+   * What tax treatment the pot gets.
+   *
+   * - `savings`: an ISA or cash, where withdrawals are returns of capital and
+   *   are not taxed.
+   * - `pension`: locked to `accessibleFromAge` like any other pot, but
+   *   withdrawals are taxed as pension income with the usual tax-free share,
+   *   and `bonusRatePct` is tax relief rather than a government bonus.
+   * - `taxable`: held outside a wrapper, so selling realises a capital gain
+   *   that is charged above the annual exempt amount. See `costBasis`.
    */
   kind: PotKind
   balance: number
+  /**
+   * What the holdings in a `taxable` pot cost — the pooled base cost that the
+   * gain is measured against. Contributions add to it; growth does not, so
+   * the gap between this and `balance` is the unrealised gain.
+   *
+   * Ignored for `savings` and `pension` pots, which have nothing to measure.
+   * A new pot starts with this equal to its balance, which assumes no gain so
+   * far; anyone who knows better can say what they actually paid.
+   */
+  costBasis: number
   annualContribution: number
   growthRate: number // nominal annual %
   /** Age from which this pot can be drawn on. LISAs are locked until 60. */
@@ -325,8 +341,12 @@ export interface YearRow {
   dbIncomeTotal: number
   /** Salary + state pensions + DB pensions, before any drawdown. */
   guaranteedIncome: number
-  /** Total income tax across the household this year. */
+  /** All tax across the household this year — income tax and CGT together. */
   taxPaid: number
+  /** The capital gains tax share of `taxPaid`, from selling taxable pots. */
+  capitalGainsTax: number
+  /** Gains realised this year by selling out of taxable pots. */
+  realisedGains: number
   /** Gross income less tax — what's actually available to spend. */
   netIncome: number
 

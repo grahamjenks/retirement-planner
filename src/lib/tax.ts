@@ -3,8 +3,13 @@
  *
  * Salaries are entered as take-home, so their tax is already accounted for.
  * What still needs taxing in this model is pension income: the state pension,
- * defined-benefit pensions, and the taxable share of DC drawdown. ISA and
- * general savings withdrawals are returns of capital and are not taxed here.
+ * defined-benefit pensions, and the taxable share of DC drawdown. ISA and cash
+ * savings withdrawals are returns of capital and are not taxed.
+ *
+ * A pot held outside a tax wrapper — a general investment account — is taxed
+ * too, but under capital gains rather than income: selling realises the gain
+ * on what is sold, and that gain is charged above an annual exempt amount at
+ * rates that depend on how much basic-rate band the owner's income has left.
  */
 export interface TaxSettings {
   enabled: boolean
@@ -29,6 +34,12 @@ export interface TaxSettings {
    * £268,275. Once used up, every further withdrawal is fully taxable.
    */
   taxFreeLumpSumAllowance: number
+  /** Gains each person can realise per year before CGT is due (£3,000). */
+  cgtAnnualExempt: number
+  /** CGT rate on gains falling in the basic-rate band (18% from Oct 2024). */
+  cgtBasicRatePct: number
+  /** CGT rate on gains above it (24%). */
+  cgtHigherRatePct: number
 }
 
 export const defaultTaxSettings: TaxSettings = {
@@ -42,6 +53,9 @@ export const defaultTaxSettings: TaxSettings = {
   taperThreshold: 100000,
   pensionTaxFreePct: 25,
   taxFreeLumpSumAllowance: 268275,
+  cgtAnnualExempt: 3000,
+  cgtBasicRatePct: 18,
+  cgtHigherRatePct: 24,
 }
 
 /** Personal allowance after the £1-for-every-£2 taper above the threshold. */
@@ -112,6 +126,92 @@ export function grossUpPension(
   for (let i = 0; i < 60; i++) {
     const mid = (low + high) / 2
     if (netFromPensionGross(mid, base, t, freeRemaining) < net) low = mid
+    else high = mid
+  }
+  return high
+}
+
+/** Taxable income after the personal allowance — what fills the tax bands. */
+function taxableIncome(income: number, t: TaxSettings): number {
+  return Math.max(0, income - allowanceFor(income, t))
+}
+
+/**
+ * Capital gains tax on a year's realised gains for one person.
+ *
+ * Gains sit on top of income: whatever basic-rate band the person's income
+ * leaves unused is charged at the lower rate, and the rest at the higher one.
+ * So the same gain costs more to someone already earning well.
+ */
+export function capitalGainsTax(gain: number, income: number, t: TaxSettings): number {
+  if (!t.enabled || gain <= 0) return 0
+  const taxable = Math.max(0, gain - Math.max(0, t.cgtAnnualExempt))
+  if (taxable <= 0) return 0
+  const headroom = Math.max(0, t.basicBandWidth - taxableIncome(income, t))
+  const atBasic = Math.min(taxable, headroom)
+  const atHigher = taxable - atBasic
+  return atBasic * (t.cgtBasicRatePct / 100) + atHigher * (t.cgtHigherRatePct / 100)
+}
+
+/**
+ * The gain realised by selling `gross` out of a pot, under the pooling rule:
+ * every unit sold carries the same average cost, so the gain is the whole
+ * pot's unrealised gain scaled by the share being sold.
+ *
+ * A pot worth less than it cost realises nothing rather than a loss — losses
+ * can be carried against other gains in reality, which this does not model.
+ */
+export function gainOnDisposal(gross: number, balance: number, basis: number): number {
+  if (gross <= 0 || balance <= 0) return 0
+  const unrealised = balance - Math.max(0, basis)
+  if (unrealised <= 0) return 0
+  return (Math.min(gross, balance) / balance) * unrealised
+}
+
+/** Spendable amount left from selling `gross` out of a taxable pot. */
+export function netFromTaxableGross(
+  gross: number,
+  balance: number,
+  basis: number,
+  gainsSoFar: number,
+  income: number,
+  t: TaxSettings,
+): number {
+  if (gross <= 0) return 0
+  if (!t.enabled) return gross
+  const gain = gainOnDisposal(gross, balance, basis)
+  const extra =
+    capitalGainsTax(gainsSoFar + gain, income, t) - capitalGainsTax(gainsSoFar, income, t)
+  return gross - extra
+}
+
+/**
+ * Gross disposal needed to leave `net` in hand from a taxable pot. Bisected
+ * for the same reason as the pension gross-up: the charge is piecewise linear
+ * and monotonic, so no algebra per band is needed and the annual exempt
+ * amount running out part-way through is handled for free.
+ */
+export function grossUpTaxable(
+  net: number,
+  balance: number,
+  basis: number,
+  gainsSoFar: number,
+  income: number,
+  t: TaxSettings,
+): number {
+  if (net <= 0) return 0
+  if (!t.enabled) return net
+  let low = net
+  let high = net * 2 + 1000
+  while (
+    netFromTaxableGross(high, balance, basis, gainsSoFar, income, t) < net &&
+    high < 1e9
+  ) {
+    high *= 2
+  }
+  for (let i = 0; i < 60; i++) {
+    const mid = (low + high) / 2
+    if (netFromTaxableGross(mid, balance, basis, gainsSoFar, income, t) < net) low = mid
     else high = mid
   }
   return high
