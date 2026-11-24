@@ -11,6 +11,7 @@ import type { TakeHomeEstimate, TaxSettings } from './tax'
 import { pensionSourceId, personIdFromSource } from './types'
 import type {
   Assumptions,
+  ContributionStep,
   DbScheme,
   Person,
   PersonYear,
@@ -30,8 +31,8 @@ export const MAX_PROJECTION_YEARS = 120
  * accounts for it. Salary-based schemes take contributions too, but they are
  * not modelled here, so nothing is assumed for them.
  */
-export function contributionPctFor(person: Person): number {
-  return person.pensionType === 'dc' ? Math.max(0, person.employeePensionPct) : 0
+export function contributionPctFor(person: Person, age = person.currentAge): number {
+  return person.pensionType === 'dc' ? pensionPctAt(person, age).employeePct : 0
 }
 
 /**
@@ -39,9 +40,14 @@ export function contributionPctFor(person: Person): number {
  * is estimated from gross, because treating gross as spendable overstates what
  * the household has by thousands a year.
  */
-export function takeHomeBase(person: Person, tax: TaxSettings): number {
+export function takeHomeBase(
+  person: Person,
+  tax: TaxSettings,
+  age = person.currentAge,
+): number {
   if (person.takeHomePay > 0) return person.takeHomePay
-  return estimateTakeHome(person.currentAnnualIncome, contributionPctFor(person), tax).takeHome
+  return estimateTakeHome(person.currentAnnualIncome, contributionPctFor(person, age), tax)
+    .takeHome
 }
 
 /** The full estimate, for showing the working in the UI. */
@@ -123,16 +129,52 @@ export function spendingAtAge(a: Assumptions, age: number): number {
  * sort per call would be thousands of them. It also means the stored order
  * of the steps does not matter.
  */
-export function contributionAmountAt(pot: SavingsPot, ownerAge: number): number {
-  let amount = Math.max(0, pot.annualContribution)
+export function amountFromSchedule(
+  base: number,
+  steps: readonly ContributionStep[],
+  age: number,
+): number {
+  let amount = Math.max(0, base)
   let latest = -Infinity
-  for (const step of pot.contributionSchedule) {
-    if (ownerAge >= step.fromAge && step.fromAge >= latest) {
+  for (const step of steps) {
+    if (age >= step.fromAge && step.fromAge >= latest) {
       latest = step.fromAge
       amount = Math.max(0, step.amount)
     }
   }
   return amount
+}
+
+export function contributionAmountAt(pot: SavingsPot, ownerAge: number): number {
+  return amountFromSchedule(pot.annualContribution, pot.contributionSchedule, ownerAge)
+}
+
+/**
+ * What share of salary goes into a DC pension at a given age, split back into
+ * the employee and employer halves.
+ *
+ * A step carries the combined percentage, because that is the figure the year
+ * grid ticks on and off: a career break or a change of scheme moves both
+ * halves together. The split follows the headline ratio, so someone paying 5%
+ * against an employer's 3% who drops to half still has their employer paying
+ * the larger share of it.
+ */
+export function pensionPctAt(
+  person: Person,
+  age: number,
+): { employeePct: number; employerPct: number } {
+  const employee = Math.max(0, person.employeePensionPct)
+  const employer = Math.max(0, person.employerPensionPct)
+  const headline = employee + employer
+  if (person.pensionSchedule.length === 0) {
+    return { employeePct: employee, employerPct: employer }
+  }
+  const combined = amountFromSchedule(headline, person.pensionSchedule, age)
+  if (combined <= 0) return { employeePct: 0, employerPct: 0 }
+  // Nothing to take a ratio from, so it all counts as the employee's.
+  if (headline <= 0) return { employeePct: combined, employerPct: 0 }
+  const scale = combined / headline
+  return { employeePct: employee * scale, employerPct: employer * scale }
 }
 
 /**
@@ -194,10 +236,14 @@ function clampPct(v: number): number {
   return Math.min(100, Math.max(0, v))
 }
 
-export function annualPensionContribution(person: Person, salary: number): number {
+export function annualPensionContribution(
+  person: Person,
+  salary: number,
+  age = person.currentAge,
+): number {
   if (person.pensionType !== 'dc') return 0
-  const pct = Math.max(0, person.employeePensionPct) + Math.max(0, person.employerPensionPct)
-  return salary * (pct / 100)
+  const { employeePct, employerPct } = pensionPctAt(person, age)
+  return salary * ((employeePct + employerPct) / 100)
 }
 
 /** Every drawable source: savings pots plus each person's DC pension. */
@@ -360,7 +406,9 @@ export function simulate(
       // Gross drives pension accrual and contribution percentages; take-home is
       // what the household can actually spend.
       const salary = retired ? 0 : Math.max(0, person.currentAnnualIncome) * growth
-      const takeHome = retired ? 0 : takeHomeBase(person, a.tax) * growth
+      // Pay into a pension and less of the salary reaches the bank, so a year
+      // the schedule pauses contributions is a year with more spendable pay.
+      const takeHome = retired ? 0 : takeHomeBase(person, a.tax, age) * growth
       grossSalaryTotal += salary
       salaryTotal += takeHome
 
@@ -375,7 +423,7 @@ export function simulate(
           -1,
           realRate(person.pensionGrowthRate, a.inflationRate) + (returnShocks?.[t] ?? 0),
         )
-        pensionContribution = retired ? 0 : annualPensionContribution(person, salary)
+        pensionContribution = retired ? 0 : annualPensionContribution(person, salary, age)
         pensionPots.set(
           person.id,
           (pensionPots.get(person.id) ?? 0) * (1 + realGrowth) + pensionContribution,

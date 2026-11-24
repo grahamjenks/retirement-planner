@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, ownedLabel } from '../lib/format'
 import { effectiveAccessAge, potOwner } from '../lib/projection'
 import { eventNoteFor, milestoneYears, selectRows } from '../lib/tableRows'
 import type { Assumptions, YearRow } from '../lib/types'
@@ -113,7 +113,11 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
               {detailed &&
                 a.people.map((p, pi) => (
                 <Fragment key={`head-${p.id}`}>
-                  <Th color={SALARY_COLOR} label={`${p.name}: take-home`} groupStart={pi > 0} />
+                  <Th
+              color={SALARY_COLOR}
+              label={ownedLabel('take-home', p.name, a.people.length)}
+              groupStart={pi > 0}
+            />
                   {p.pensionType === 'db' ? (
                     p.dbSchemes.map((scheme) => (
                       <Th
@@ -125,10 +129,13 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
                   ) : (
                     <Th
                       color={PENSION_COLORS[dcPeople.indexOf(p) % PENSION_COLORS.length]}
-                      label={`${p.name}: pension`}
+                      label={ownedLabel('pension', p.name, a.people.length)}
                     />
                   )}
-                  <Th color={STATE_PENSION_COLOR} label={`${p.name}: state pension`} />
+                  <Th
+              color={STATE_PENSION_COLOR}
+              label={ownedLabel('state pension', p.name, a.people.length)}
+            />
                 </Fragment>
               ))}
               {detailed &&
@@ -161,7 +168,7 @@ export function IncomeTable({ assumptions: a, rows, title, badge }: IncomeTableP
                     <Th
                       key={`into-${p.id}`}
                       color={PENSION_COLORS[i % PENSION_COLORS.length]}
-                      label={`→ ${p.name}: pension`}
+                      label={`→ ${ownedLabel('pension', p.name, a.people.length).toLowerCase()}`}
                     />
                   ))}
                   {a.pots.map((pot, i) => (

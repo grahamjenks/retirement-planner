@@ -1,15 +1,31 @@
 import { useState } from 'react'
 import { formatCurrency } from '../lib/format'
-import { contributionYears, toggleContributionYear } from '../lib/contributionSchedule'
+import { toggleContributionYear } from '../lib/contributionSchedule'
+import type { ContributionYear } from '../lib/contributionSchedule'
 import { newId } from '../lib/storage'
-import type { ContributionStep, SavingsPot } from '../lib/types'
+import type { ContributionStep } from '../lib/types'
 import { NumberField } from './NumberField'
 
 interface ContributionScheduleProps {
-  pot: SavingsPot
+  /** The window, year by year, from `scheduleYears`. */
+  years: ContributionYear[]
   /** What goes in before the first step. */
   baseAmount: number
+  /**
+   * How an amount reads. Money for a pot, a percentage of salary for a
+   * pension — the grid and the steps are the same mechanism either way.
+   */
+  formatAmount?: (amount: number) => string
+  /** Wording and units for the per-step amount field. */
+  amountLabel?: string
+  amountPrefix?: string
+  amountSuffix?: string
+  amountStep?: number
+  /** What a filled year means, for the grid's hint line. */
+  perYearNoun?: string
   ownerName: string
+  /** True when the household has only this person, so a name adds nothing. */
+  soleOwner: boolean
   currentAge: number
   /** Where contributions stop for good, whatever the schedule says. */
   endAge: number
@@ -19,9 +35,16 @@ interface ContributionScheduleProps {
 }
 
 export function ContributionSchedule({
-  pot,
+  years,
   baseAmount,
+  formatAmount = formatCurrency,
+  amountLabel = 'Pay in',
+  amountPrefix = '£',
+  amountSuffix,
+  amountStep = 250,
+  perYearNoun = 'a year',
   ownerName,
+  soleOwner,
   currentAge,
   endAge,
   retirementAge,
@@ -29,7 +52,6 @@ export function ContributionSchedule({
   onChange,
 }: ContributionScheduleProps) {
   const [refused, setRefused] = useState<string | null>(null)
-  const years = contributionYears(pot, currentAge, endAge, retirementAge)
 
   function toggleYear(age: number) {
     const result = toggleContributionYear(years, age, baseAmount, steps)
@@ -82,7 +104,7 @@ export function ContributionSchedule({
                 onClick={() => toggleYear(year.age)}
                 title={
                   year.paying
-                    ? `Age ${year.age}: ${formatCurrency(year.amount)} — click to skip this year`
+                    ? `Age ${year.age}: ${formatAmount(year.amount)} — click to skip this year`
                     : `Age ${year.age}: nothing — click to pay in`
                 }
                 className={`w-9 rounded-md border py-1 text-[11px] font-medium tabular-nums transition-colors ${
@@ -96,7 +118,8 @@ export function ContributionSchedule({
             ))}
           </div>
           <p className="mt-1.5 text-xs text-slate-400">
-            {ownerName}'s age. Filled years pay in; click one to skip it. Contributions stop at{' '}
+            {soleOwner ? 'Your' : `${ownerName}'s`} age. Filled years pay in; click one to skip
+            it. Contributions stop at{' '}
             {Math.min(endAge, retirementAge)} whatever is ticked here.
           </p>
           {refused && (
@@ -108,8 +131,8 @@ export function ContributionSchedule({
       )}
 
       <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-        From {ownerName}'s age <strong>{currentAge}</strong>:{' '}
-        <strong>{formatCurrency(baseAmount)}</strong> a year
+        From {soleOwner ? 'your' : `${ownerName}'s`} age <strong>{currentAge}</strong>:{' '}
+        <strong>{formatAmount(baseAmount)}</strong> {perYearNoun}
         {baseAmount === 0 && <> — nothing goes in until a step below says otherwise</>}
       </div>
 
@@ -131,11 +154,12 @@ export function ContributionSchedule({
                   max={120}
                 />
                 <NumberField
-                  label="Pay in"
+                  label={amountLabel}
                   value={step.amount}
                   onChange={(v) => update(step.id, { amount: v })}
-                  prefix="£"
-                  step={250}
+                  prefix={amountPrefix}
+                  suffix={amountSuffix}
+                  step={amountStep}
                   hint={step.amount === 0 ? 'Paused' : undefined}
                 />
               </div>
@@ -162,7 +186,8 @@ export function ContributionSchedule({
             )}
             {!pastEnd && beforeNow && (
               <p className="mt-1 text-xs text-slate-400">
-                At or before {ownerName}'s age today, so this applies from the start.
+                At or before {soleOwner ? 'your' : `${ownerName}'s`} age today, so this applies
+                from the start.
               </p>
             )}
           </div>

@@ -1,6 +1,7 @@
 import { realRate } from '../lib/projection'
 import type { Assumptions } from '../lib/types'
 import { PENSION_COLORS, POT_COLORS } from './chartColors'
+import { ownedLabel } from '../lib/format'
 
 interface AssumptionBarProps {
   assumptions: Assumptions
@@ -73,7 +74,7 @@ export function AssumptionBar({ assumptions: a, onChange }: AssumptionBarProps) 
         {dcPeople.map((person, i) => (
           <RateSlider
             key={person.id}
-            label={`${person.name}: pension`}
+            label={ownedLabel('pension', person.name, a.people.length)}
             color={PENSION_COLORS[i % PENSION_COLORS.length]}
             value={person.pensionGrowthRate}
             realPct={realRate(person.pensionGrowthRate, a.inflationRate) * 100}

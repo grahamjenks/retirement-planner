@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, ownedLabel, personAge } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { ALERT_COLOR, PENSION_COLORS, POT_COLORS, PROPERTY_COLOR } from './chartColors'
 import { CompareNote } from './CompareNote'
@@ -21,6 +21,8 @@ import { WealthTooltip } from './WealthTooltip'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import { YearAgeTick } from './YearAxisTick'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
+import { ChartFigure } from './ChartFigure'
+import { condense, describeMoneySeries } from './chartSummary'
 
 /**
  * `property` is `stacked` plus the house.
@@ -117,7 +119,7 @@ function WealthChartBase({
   const series = [
     ...dcPeople.map((person, i) => ({
       key: `pension_${person.id}`,
-      name: `${person.name}: pension`,
+      name: ownedLabel('pension', person.name, a.people.length),
       color: PENSION_COLORS[i % PENSION_COLORS.length],
     })),
     ...a.pots.map((pot, i) => ({
@@ -130,7 +132,35 @@ function WealthChartBase({
       : []),
   ]
 
+  const tabulated = condense(rows)
   return (
+    <ChartFigure
+      title={`Wealth over time${showProperty ? ', including property equity' : ''}`}
+      summary={describeMoneySeries(
+        rows.map((r) => ({
+          label: String(r.year),
+          value: showProperty ? r.netWorth : r.totalPot,
+        })),
+        showProperty ? 'Net worth' : 'Total pots and pensions',
+      )}
+      rows={tabulated}
+      columns={[
+        { label: 'Year', value: (r) => String(r.year) },
+        {
+          label: a.people.length > 1 ? 'Ages' : 'Age',
+          value: (r) => r.people.map((x) => personAge(x.name, x.age, a.people.length)).join(', '),
+        },
+        { label: 'Savings pots', value: (r) => formatCurrency(r.potsTotal) },
+        { label: 'Pensions', value: (r) => formatCurrency(r.pensionsTotal) },
+        ...(showProperty
+          ? [{ label: 'Property equity', value: (r: YearRow) => formatCurrency(r.propertyEquityTotal) }]
+          : []),
+        {
+          label: showProperty ? 'Net worth' : 'Total',
+          value: (r) => formatCurrency(showProperty ? r.netWorth : r.totalPot),
+        },
+      ]}
+    >
     <div className="w-full">
       <div className="h-80 w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -238,7 +268,7 @@ function WealthChartBase({
                 stroke="#64748b"
                 strokeDasharray="4 4"
                 label={{
-                  value: `${person.name} retires`,
+                  value: a.people.length > 1 ? `${person.name} retires` : 'Retirement',
                   position: 'top',
                   dy: retireRows[i] * LABEL_ROW_HEIGHT,
                   fontSize: 11,
@@ -285,6 +315,7 @@ function WealthChartBase({
         />
       )}
     </div>
+    </ChartFigure>
   )
 }
 

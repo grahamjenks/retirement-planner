@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, ownedLabel, personAge } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import {
@@ -27,6 +27,8 @@ import { COMPARE_INK, ghostLine, rowsByYear, type ChartCompare } from './chartCo
 import { IncomeTooltip } from './IncomeTooltip'
 import { YearAgeTick } from './YearAxisTick'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
+import { ChartFigure } from './ChartFigure'
+import { condense, describeMoneySeries } from './chartSummary'
 
 interface IncomeChartProps {
   assumptions: Assumptions
@@ -84,6 +86,29 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
   const salaryShades = ['#94a3b8', '#cbd5e1']
 
   return (
+    <ChartFigure
+      title="Income and spending each year"
+      summary={describeMoneySeries(
+        rows.map((r) => ({ label: String(r.year), value: r.netIncome })),
+        'Net income',
+      )}
+      rows={condense(rows)}
+      columns={[
+        { label: 'Year', value: (r) => String(r.year) },
+        {
+          label: a.people.length > 1 ? 'Ages' : 'Age',
+          value: (r) => r.people.map((x) => personAge(x.name, x.age, a.people.length)).join(', '),
+        },
+        { label: 'Guaranteed income', value: (r) => formatCurrency(r.guaranteedIncome) },
+        { label: 'Drawn from pots', value: (r) => formatCurrency(r.withdrawal) },
+        { label: 'Tax', value: (r) => formatCurrency(r.taxPaid) },
+        { label: 'Spending', value: (r) => formatCurrency(r.outgoings) },
+        {
+          label: 'Shortfall',
+          value: (r) => (r.shortfall > 0 ? formatCurrency(r.shortfall) : 'None'),
+        },
+      ]}
+    >
     <div className="w-full">
       <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -123,7 +148,7 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
             <Bar
               key={person.id}
               dataKey={`salary_${person.id}`}
-              name={`${person.name}: take-home`}
+              name={ownedLabel('take-home', person.name, a.people.length)}
               stackId="income"
               fill={salaryShades[i % salaryShades.length]}
             />
@@ -146,7 +171,9 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
             <Bar
               key={`draw-${person.id}`}
               dataKey={`draw_pension_${person.id}`}
-              name={`From ${person.name}: pension`}
+              name={
+                a.people.length > 1 ? `From ${person.name}: pension` : 'From pension'
+              }
               stackId="income"
               fill={PENSION_COLORS[i % PENSION_COLORS.length]}
             />
@@ -179,7 +206,7 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
               stroke="#64748b"
               strokeDasharray="4 4"
               label={{
-                value: `${person.name} retires`,
+                value: a.people.length > 1 ? `${person.name} retires` : 'Retirement',
                 position: 'top',
                 dy: retireRows[i] * LABEL_ROW_HEIGHT,
                 fontSize: 11,
@@ -194,6 +221,7 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
         <CompareNote name={compare.name} of="its total income and its outgoings" />
       )}
     </div>
+    </ChartFigure>
   )
 }
 

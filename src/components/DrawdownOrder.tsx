@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { formatCurrency } from '../lib/format'
+import { formatCurrency, ownedLabel } from '../lib/format'
 import { allSourceIds, resolveDrawdownOrder } from '../lib/projection'
 import { drawdownGoals, optimiseDrawdown } from '../lib/drawdownOptimiser'
 import type { DrawdownGoal, OptimisationResult } from '../lib/drawdownOptimiser'
@@ -48,7 +48,7 @@ export function DrawdownOrder({
       const idx = dcPeople.findIndex((p) => p.id === personId)
       const person = dcPeople[idx]
       return {
-        name: person ? `${person.name}: pension` : 'Pension',
+        name: person ? ownedLabel('pension', person.name, a.people.length) : 'Pension',
         color: PENSION_COLORS[Math.max(0, idx) % PENSION_COLORS.length],
       }
     }

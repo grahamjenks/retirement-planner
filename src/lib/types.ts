@@ -138,6 +138,18 @@ export interface Person {
   currentPensionPot: number
   employeePensionPct: number
   employerPensionPct: number
+  /**
+   * Changes to pension contributions at set ages, in the same shape as a
+   * savings pot's schedule. A step's `amount` is the **combined** percentage
+   * of salary from that age — employee and employer together — because that
+   * is what the year grid ticks on and off: a career break or a change of
+   * scheme moves both halves at once. The split between them follows the
+   * headline ratio above.
+   *
+   * Empty means the headline percentages apply for every working year, which
+   * is what every plan did before this existed.
+   */
+  pensionSchedule: ContributionStep[]
   pensionGrowthRate: number // nominal annual %
   pensionAccessAge: number
 

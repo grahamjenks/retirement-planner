@@ -29,7 +29,7 @@ import { SummaryCard } from './components/SummaryCard'
 import { TaxHeadroomChart } from './components/TaxHeadroomChart'
 import { TradeoffChart } from './components/TradeoffChart'
 import { WealthChart, type WealthChartMode } from './components/WealthChart'
-import { formatCurrency, formatMonthly } from './lib/format'
+import { formatCurrency, formatMonthly, personAge } from './lib/format'
 import {
   drawdownStartRow,
   findEarliestRetirementAge,
@@ -614,7 +614,10 @@ function App() {
           answer, rather than scrolling 2,445px of results to change a figure.
         */}
         <aside
-          className={`no-print w-full shrink-0 rounded-2xl border border-slate-200 bg-white xl:w-96 dark:border-slate-700 dark:bg-slate-800 ${
+          // @container: the field grids below size themselves against this
+          // sidebar's own width, which is the full page when stacked and a fixed
+          // column at xl. Viewport breakpoints cannot tell those two apart.
+          className={`@container no-print w-full shrink-0 rounded-2xl border border-slate-200 bg-white xl:w-96 dark:border-slate-700 dark:bg-slate-800 ${
             showInputs ? '' : 'hidden'
           }`}
         >
@@ -707,7 +710,7 @@ function App() {
                   <>
                     Starts <strong>{retirementRow.year}</strong>, when{' '}
                     {a.people.length > 1 ? 'the last of you stops work' : 'you stop work'} (
-                    {retirementRow.people.map((p) => `${p.name} ${p.age}`).join(', ')}). Until then
+                    {retirementRow.people.map((p) => personAge(p.name, p.age, a.people.length)).join(', ')}). Until then
                     the working figure applies, even if one of you has already retired.
                   </>
                 ) : (
@@ -940,7 +943,11 @@ function App() {
                   return (
                     <HeroStat
                       key={person.id}
-                      label={`Earliest retirement — ${person.name}`}
+                      label={
+                        a.people.length > 1
+                          ? `Earliest retirement — ${person.name}`
+                          : 'Earliest retirement'
+                      }
                       value={earliestAge ?? `${searchedUpTo}+`}
                       tone={earliestAge ? 'good' : 'bad'}
                       track={earliestAge}
@@ -1023,7 +1030,7 @@ function App() {
                   sub={
                     exhausted
                       ? `${exhausted.year} — ${exhausted.people
-                          .map((p) => `${p.name} ${p.age}`)
+                          .map((p) => personAge(p.name, p.age, a.people.length))
                           .join(', ')}`
                       : 'Savings and pensions outlast the plan.'
                   }
@@ -1047,8 +1054,8 @@ function App() {
                 )}{' '}
                 {earliest.earliestAge && (
                   <>
-                    {primary.name} retiring at <strong>{earliest.earliestAge}</strong> would clear it
-                    on these assumptions.
+                    {a.people.length > 1 ? `${primary.name} retiring` : 'Retiring'} at{' '}
+                    <strong>{earliest.earliestAge}</strong> would clear it on these assumptions.
                   </>
                 )}
               </div>
@@ -1077,7 +1084,7 @@ function App() {
                   sub={
                     finalRow
                       ? `At ${finalRow.year} (${finalRow.people
-                          .map((p) => `${p.name} ${p.age}`)
+                          .map((p) => personAge(p.name, p.age, a.people.length))
                           .join(', ')})`
                       : undefined
                   }

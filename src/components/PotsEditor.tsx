@@ -15,6 +15,7 @@ import { AgeRule, type AgeRuleMode } from './AgeRule'
 import { ContributionSchedule } from './ContributionSchedule'
 import { NumberField } from './NumberField'
 import { POT_COLORS } from './chartColors'
+import { contributionYears } from '../lib/contributionSchedule'
 
 interface PotsEditorProps {
   assumptions: Assumptions
@@ -203,7 +204,7 @@ function PotCard({
         </label>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3">
         <NumberField
           label="Balance"
           value={pot.balance}
@@ -326,9 +327,10 @@ function PotCard({
       {showSchedule && (
         <div className="mt-3 rounded-lg border border-ink-200 bg-ink-50/40 p-2.5 dark:border-ink-800 dark:bg-ink-950/30">
           <ContributionSchedule
-            pot={pot}
+            years={contributionYears(pot, currentAge, endAge, retirementAge)}
             baseAmount={pot.annualContribution}
             ownerName={owner.name}
+            soleOwner={people.length <= 1}
             currentAge={currentAge}
             endAge={endAge}
             retirementAge={retirementAge}
@@ -422,7 +424,7 @@ function PotCard({
       )}
 
       {showTopUp && showAdvanced && (
-        <div className="mt-2 grid grid-cols-2 gap-3">
+        <div className="mt-2 grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3">
           <NumberField
             label={isPension ? 'Tax relief %' : 'Gov. bonus %'}
             value={pot.bonusRatePct}

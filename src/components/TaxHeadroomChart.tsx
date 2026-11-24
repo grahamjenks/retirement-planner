@@ -11,13 +11,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, ownedLabel, personAge } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { PENSION_COLORS } from './chartColors'
 import { CompareNote } from './CompareNote'
 import { ghostLine, rowsByYear, type ChartCompare } from './chartCompare'
 import { YearAgeTick } from './YearAxisTick'
 import { agesByYearFrom, yearAxisLabel } from './yearAxis'
+import { ChartFigure } from './ChartFigure'
+import { condense, describeMoneySeries } from './chartSummary'
 
 interface TaxHeadroomChartProps {
   assumptions: Assumptions
@@ -66,6 +68,30 @@ function TaxHeadroomChartBase({ assumptions: a, rows, compare }: TaxHeadroomChar
   )
 
   return (
+    <ChartFigure
+      title="Taxable income against the tax bands"
+      summary={describeMoneySeries(
+        rows.map((r) => ({ label: String(r.year), value: r.taxPaid })),
+        'Tax paid',
+      )}
+      rows={condense(rows)}
+      columns={[
+        { label: 'Year', value: (r) => String(r.year) },
+        {
+          label: a.people.length > 1 ? 'Ages' : 'Age',
+          value: (r) => r.people.map((x) => personAge(x.name, x.age, a.people.length)).join(', '),
+        },
+        ...a.people.map((person) => ({
+          label: ownedLabel('taxable income', person.name, a.people.length),
+          value: (r: YearRow) => {
+            const py = r.people.find((x) => x.id === person.id)
+            if (!py) return '—'
+            return formatCurrency(py.salary + py.statePension + py.dbIncome + py.taxablePensionWithdrawal)
+          },
+        })),
+        { label: 'Tax paid', value: (r) => formatCurrency(r.taxPaid) },
+      ]}
+    >
     <div className="w-full">
       <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -101,7 +127,7 @@ function TaxHeadroomChartBase({ assumptions: a, rows, compare }: TaxHeadroomChar
             labelFormatter={(year) => {
               const row = rows.find((r) => r.year === Number(year))
               return row
-                ? `${year} — ${row.people.map((p) => `${p.name} ${p.age}`).join(', ')}`
+                ? `${year} — ${row.people.map((p) => personAge(p.name, p.age, row.people.length)).join(', ')}`
                 : `${year}`
             }}
           />
@@ -135,7 +161,7 @@ function TaxHeadroomChartBase({ assumptions: a, rows, compare }: TaxHeadroomChar
               key={person.id}
               type="monotone"
               dataKey={`taxable_${person.id}`}
-              name={`${person.name}: taxable income`}
+              name={ownedLabel('taxable income', person.name, a.people.length)}
               stroke={PENSION_COLORS[i % PENSION_COLORS.length]}
               strokeWidth={2}
               dot={false}
@@ -156,6 +182,7 @@ function TaxHeadroomChartBase({ assumptions: a, rows, compare }: TaxHeadroomChar
       </div>
       {compare && <CompareNote name={compare.name} of="the same people's taxable income" />}
     </div>
+    </ChartFigure>
   )
 }
 

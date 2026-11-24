@@ -55,7 +55,13 @@ export function NumberField({
   }
 
   return (
-    <label className="block">
+    /*
+     * max-w-sm: a number is a handful of characters, so a box wider than this
+     * is just a long walk from the label to the caret. Fields in a grid column
+     * are already narrower than the cap; it only bites on the ones that stand
+     * alone in a sidebar running the full width of the page.
+     */
+    <label className="block max-w-sm">
       <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <div
         className={`mt-1 flex items-center rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-ink-500 dark:border-slate-600 ${

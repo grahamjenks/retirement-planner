@@ -1,4 +1,4 @@
-import { formatCurrency } from '../lib/format'
+import { formatCurrency, ownedLabel, personAge } from '../lib/format'
 import { allowanceFor } from '../lib/tax'
 import type { Assumptions, YearRow } from '../lib/types'
 import {
@@ -42,7 +42,7 @@ export function IncomeTooltip({ active, label, assumptions: a, rows }: IncomeToo
     if (py.takeHome > 0.5) {
       lines.push({
         key: `s-${py.id}`,
-        name: `${py.name}: take-home`,
+        name: ownedLabel('take-home', py.name, row.people.length),
         color: SALARY_COLOR,
         value: py.takeHome,
       })
@@ -53,7 +53,7 @@ export function IncomeTooltip({ active, label, assumptions: a, rows }: IncomeToo
       if (sch.income > 0.5) {
         lines.push({
           key: `db-${py.id}-${sch.id}`,
-          name: `${py.name}: ${sch.name}`,
+          name: ownedLabel(sch.name, py.name, row.people.length),
           color: DB_PENSION_COLOR,
           value: sch.income,
         })
@@ -64,7 +64,7 @@ export function IncomeTooltip({ active, label, assumptions: a, rows }: IncomeToo
     if (py.statePension > 0.5) {
       lines.push({
         key: `sp-${py.id}`,
-        name: `${py.name}: state pension`,
+        name: ownedLabel('state pension', py.name, row.people.length),
         color: STATE_PENSION_COLOR,
         value: py.statePension,
       })
@@ -75,7 +75,7 @@ export function IncomeTooltip({ active, label, assumptions: a, rows }: IncomeToo
     if (py && py.pensionWithdrawal > 0.5) {
       lines.push({
         key: `dw-${person.id}`,
-        name: `From ${person.name}: pension`,
+        name: row.people.length > 1 ? `From ${person.name}: pension` : 'From pension',
         color: PENSION_COLORS[i % PENSION_COLORS.length],
         value: py.pensionWithdrawal,
       })
@@ -100,7 +100,7 @@ export function IncomeTooltip({ active, label, assumptions: a, rows }: IncomeToo
     <div className="max-w-xs rounded-lg border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur dark:border-slate-600 dark:bg-slate-800/95">
       <p className="font-semibold text-slate-800 dark:text-slate-100">{year}</p>
       <p className="mb-2 text-[11px] text-slate-400">
-        {row.people.map((p) => `${p.name} ${p.age}`).join(' · ')}
+        {row.people.map((p) => personAge(p.name, p.age, row.people.length)).join(' · ')}
       </p>
 
       <table className="w-full">
