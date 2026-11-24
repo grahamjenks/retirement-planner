@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrencyCompact } from '../lib/format'
+import { formatCurrencyCompact, ownedLabel } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { ALERT_COLOR, PENSION_COLORS, POT_COLORS, PROPERTY_COLOR } from './chartColors'
 import { CompareNote } from './CompareNote'
@@ -117,7 +117,7 @@ function WealthChartBase({
   const series = [
     ...dcPeople.map((person, i) => ({
       key: `pension_${person.id}`,
-      name: `${person.name}: pension`,
+      name: ownedLabel('pension', person.name, a.people.length),
       color: PENSION_COLORS[i % PENSION_COLORS.length],
     })),
     ...a.pots.map((pot, i) => ({
@@ -238,7 +238,7 @@ function WealthChartBase({
                 stroke="#64748b"
                 strokeDasharray="4 4"
                 label={{
-                  value: `${person.name} retires`,
+                  value: a.people.length > 1 ? `${person.name} retires` : 'Retirement',
                   position: 'top',
                   dy: retireRows[i] * LABEL_ROW_HEIGHT,
                   fontSize: 11,

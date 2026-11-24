@@ -151,7 +151,7 @@ function PersonCard({
 
       {open && (
       <>
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className="mt-3 grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3">
         <NumberField
           label="Current age"
           value={person.currentAge}
@@ -300,7 +300,7 @@ function PersonCard({
             prefix="£"
             step={1000}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3">
             <NumberField
               label="Own contribution"
               value={person.employeePensionPct}
@@ -351,7 +351,7 @@ function PersonCard({
 
       </Disclosure>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 dark:border-slate-600">
+      <div className="mt-4 grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3 border-t border-slate-200 pt-3 dark:border-slate-600">
         <NumberField
           label="State pension age"
           value={person.statePensionAge}
@@ -421,7 +421,7 @@ function SchemeCard({ scheme, person, onChange, onRemove }: SchemeCardProps) {
         }
       />
 
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-2">
         <NumberField
           label="Accrual rate"
           value={scheme.accrualRatePct}

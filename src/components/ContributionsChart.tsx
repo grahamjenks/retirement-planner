@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, ownedLabel, personAge } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import { PENSION_COLORS, POT_COLORS } from './chartColors'
@@ -115,7 +115,7 @@ function ContributionsChartBase({ assumptions: a, rows, compare }: Contributions
                 row.potContributions.reduce((s, c) => s + c, 0) +
                 row.people.reduce((s, p) => s + p.pensionContribution, 0)
               return `${year} — ${row.people
-                .map((p) => `${p.name} ${p.age}`)
+                .map((p) => personAge(p.name, p.age, row.people.length))
                 .join(', ')} · total ${formatCurrency(total)}`
             }}
           />
@@ -126,7 +126,7 @@ function ContributionsChartBase({ assumptions: a, rows, compare }: Contributions
             <Bar
               key={person.id}
               dataKey={`pension_${person.id}`}
-              name={`${person.name}: pension`}
+              name={ownedLabel('pension', person.name, a.people.length)}
               stackId="in"
               fill={PENSION_COLORS[i % PENSION_COLORS.length]}
             />
@@ -151,7 +151,7 @@ function ContributionsChartBase({ assumptions: a, rows, compare }: Contributions
                 stroke="#64748b"
                 strokeDasharray="4 4"
                 label={{
-                  value: `${person.name} retires`,
+                  value: a.people.length > 1 ? `${person.name} retires` : 'Retirement',
                   position: 'top',
                   dy: retireRows[i] * LABEL_ROW_HEIGHT,
                   fontSize: 11,

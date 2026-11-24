@@ -1,3 +1,4 @@
+import { ownedLabel } from './format'
 import { effectiveAccessAge, potOwner, schemePensionAge } from './projection'
 import type { Assumptions, YearRow } from './types'
 
@@ -37,16 +38,22 @@ export function selectRows(
 /** Short label for what changes in this year, e.g. "Ann retires · Pension starts". */
 export function eventNoteFor(a: Assumptions, row: YearRow): string | null {
   const notes: string[] = []
+  // On a one-person plan there is nobody these events could belong to instead,
+  // and the name a new plan carries is "Me" — so naming them says nothing and
+  // reads as though someone else is in the table.
+  const sole = a.people.length <= 1
   a.people.forEach((p) => {
     const age = p.currentAge + row.t
-    if (age === p.retirementAge) notes.push(`${p.name} retires`)
-    if (age === p.statePensionAge) notes.push(`${p.name}: state pension`)
+    if (age === p.retirementAge) notes.push(sole ? 'Retires' : `${p.name} retires`)
+    if (age === p.statePensionAge) notes.push(ownedLabel('state pension', p.name, a.people.length))
     if (p.pensionType === 'dc' && age === p.pensionAccessAge) {
-      notes.push(`${p.name}: pension unlocks`)
+      notes.push(ownedLabel('pension unlocks', p.name, a.people.length))
     }
     if (p.pensionType === 'db') {
       p.dbSchemes.forEach((scheme) => {
-        if (age === schemePensionAge(scheme, p)) notes.push(`${p.name}: ${scheme.name} starts`)
+        if (age === schemePensionAge(scheme, p)) {
+          notes.push(ownedLabel(`${scheme.name} starts`, p.name, a.people.length))
+        }
       })
     }
   })

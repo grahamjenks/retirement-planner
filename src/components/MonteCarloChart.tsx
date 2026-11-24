@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, personAge } from '../lib/format'
 import { runMonteCarlo } from '../lib/montecarlo'
 import { simulate } from '../lib/projection'
 import type { Assumptions } from '../lib/types'
@@ -176,7 +176,7 @@ function MonteCarloChartBase({ assumptions: a, compare }: MonteCarloChartProps) 
               labelFormatter={(year) => {
                 const row = baseline.find((r) => r.year === Number(year))
                 return row
-                  ? `${year} — ${row.people.map((p) => `${p.name} ${p.age}`).join(', ')}`
+                  ? `${year} — ${row.people.map((p) => personAge(p.name, p.age, row.people.length)).join(', ')}`
                   : `${year}`
               }}
             />

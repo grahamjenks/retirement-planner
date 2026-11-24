@@ -10,6 +10,8 @@ interface ContributionScheduleProps {
   /** What goes in before the first step. */
   baseAmount: number
   ownerName: string
+  /** True when the household has only this person, so a name adds nothing. */
+  soleOwner: boolean
   currentAge: number
   /** Where contributions stop for good, whatever the schedule says. */
   endAge: number
@@ -22,6 +24,7 @@ export function ContributionSchedule({
   pot,
   baseAmount,
   ownerName,
+  soleOwner,
   currentAge,
   endAge,
   retirementAge,
@@ -96,7 +99,8 @@ export function ContributionSchedule({
             ))}
           </div>
           <p className="mt-1.5 text-xs text-slate-400">
-            {ownerName}'s age. Filled years pay in; click one to skip it. Contributions stop at{' '}
+            {soleOwner ? 'Your' : `${ownerName}'s`} age. Filled years pay in; click one to skip
+            it. Contributions stop at{' '}
             {Math.min(endAge, retirementAge)} whatever is ticked here.
           </p>
           {refused && (
@@ -108,7 +112,7 @@ export function ContributionSchedule({
       )}
 
       <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-        From {ownerName}'s age <strong>{currentAge}</strong>:{' '}
+        From {soleOwner ? 'your' : `${ownerName}'s`} age <strong>{currentAge}</strong>:{' '}
         <strong>{formatCurrency(baseAmount)}</strong> a year
         {baseAmount === 0 && <> — nothing goes in until a step below says otherwise</>}
       </div>
@@ -162,7 +166,8 @@ export function ContributionSchedule({
             )}
             {!pastEnd && beforeNow && (
               <p className="mt-1 text-xs text-slate-400">
-                At or before {ownerName}'s age today, so this applies from the start.
+                At or before {soleOwner ? 'your' : `${ownerName}'s`} age today, so this applies
+                from the start.
               </p>
             )}
           </div>

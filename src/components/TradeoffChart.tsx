@@ -89,8 +89,10 @@ function TradeoffChartBase({ assumptions: a, compare }: TradeoffChartProps) {
         )}
       </div>
       <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-        Each point re-runs the whole plan with {person.name} retiring at that age, everyone else
-        unchanged. The line shows the age the pots run dry; reaching{' '}
+        Each point re-runs the whole plan with{' '}
+        {a.people.length > 1 ? `${person.name} retiring` : 'you retiring'} at that age,
+        {a.people.length > 1 ? ' everyone else unchanged' : ''}. The line shows the age the pots
+        run dry; reaching{' '}
         {person.lifeExpectancy} means they last for life.
         {firstSustainable && (
           <>
@@ -109,7 +111,8 @@ function TradeoffChartBase({ assumptions: a, compare }: TradeoffChartProps) {
               tick={{ fontSize: 12 }}
               height={42}
               label={{
-                value: `${person.name} retires at…`,
+                value:
+                  a.people.length > 1 ? `${person.name} retires at…` : 'Retires at…',
                 position: 'insideBottom',
                 offset: 2,
                 fontSize: 11,

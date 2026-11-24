@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrencyCompact } from '../lib/format'
+import { formatCurrencyCompact, ownedLabel } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { LABEL_ROW_HEIGHT, labelRows } from './referenceLabels'
 import {
@@ -123,7 +123,7 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
             <Bar
               key={person.id}
               dataKey={`salary_${person.id}`}
-              name={`${person.name}: take-home`}
+              name={ownedLabel('take-home', person.name, a.people.length)}
               stackId="income"
               fill={salaryShades[i % salaryShades.length]}
             />
@@ -146,7 +146,9 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
             <Bar
               key={`draw-${person.id}`}
               dataKey={`draw_pension_${person.id}`}
-              name={`From ${person.name}: pension`}
+              name={
+                a.people.length > 1 ? `From ${person.name}: pension` : 'From pension'
+              }
               stackId="income"
               fill={PENSION_COLORS[i % PENSION_COLORS.length]}
             />
@@ -179,7 +181,7 @@ function IncomeChartBase({ assumptions: a, rows, drawdownYear, compare }: Income
               stroke="#64748b"
               strokeDasharray="4 4"
               label={{
-                value: `${person.name} retires`,
+                value: a.people.length > 1 ? `${person.name} retires` : 'Retirement',
                 position: 'top',
                 dy: retireRows[i] * LABEL_ROW_HEIGHT,
                 fontSize: 11,

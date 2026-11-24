@@ -137,7 +137,7 @@ function PropertyCard({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3">
         <NumberField
           label="Value today"
           value={property.value}
@@ -155,7 +155,7 @@ function PropertyCard({
         />
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className="mt-3 grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3">
         <NumberField
           label="Mortgage left"
           value={property.mortgageBalance}
@@ -198,7 +198,7 @@ function PropertyCard({
 
       {selling && (
         <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 @xl:grid-cols-3 @4xl:grid-cols-4 gap-3">
             <NumberField
               label={`At ${owner.name}'s age`}
               value={property.sellAtAge ?? owner.retirementAge}

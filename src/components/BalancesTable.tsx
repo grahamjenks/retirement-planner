@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, ownedLabel } from '../lib/format'
 import { effectiveAccessAge, potOwner, realRate, schemePensionAge } from '../lib/projection'
 import { eventNoteFor, milestoneYears, selectRows } from '../lib/tableRows'
 import type { Assumptions, YearRow } from '../lib/types'
@@ -124,7 +124,7 @@ export function BalancesTable({ assumptions: a, rows, title, badge }: BalancesTa
                   key={p.id}
                   className="px-2 py-2 text-right font-semibold whitespace-nowrap text-slate-500 dark:text-slate-400"
                 >
-                  {p.name}
+                  {a.people.length > 1 ? p.name : 'Age'}
                 </th>
               ))}
               {dcPeople.map((p, i) => (
@@ -134,7 +134,7 @@ export function BalancesTable({ assumptions: a, rows, title, badge }: BalancesTa
                       className="h-2 w-2 rounded-full"
                       style={{ backgroundColor: PENSION_COLORS[i % PENSION_COLORS.length] }}
                     />
-                    {p.name}: pension
+                    {ownedLabel('pension', p.name, a.people.length)}
                   </span>
                 </th>
               ))}

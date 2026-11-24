@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrency, formatCurrencyCompact } from '../lib/format'
+import { formatCurrency, formatCurrencyCompact, ownedLabel, personAge } from '../lib/format'
 import type { Assumptions, YearRow } from '../lib/types'
 import { PENSION_COLORS } from './chartColors'
 import { CompareNote } from './CompareNote'
@@ -101,7 +101,7 @@ function TaxHeadroomChartBase({ assumptions: a, rows, compare }: TaxHeadroomChar
             labelFormatter={(year) => {
               const row = rows.find((r) => r.year === Number(year))
               return row
-                ? `${year} — ${row.people.map((p) => `${p.name} ${p.age}`).join(', ')}`
+                ? `${year} — ${row.people.map((p) => personAge(p.name, p.age, row.people.length)).join(', ')}`
                 : `${year}`
             }}
           />
@@ -135,7 +135,7 @@ function TaxHeadroomChartBase({ assumptions: a, rows, compare }: TaxHeadroomChar
               key={person.id}
               type="monotone"
               dataKey={`taxable_${person.id}`}
-              name={`${person.name}: taxable income`}
+              name={ownedLabel('taxable income', person.name, a.people.length)}
               stroke={PENSION_COLORS[i % PENSION_COLORS.length]}
               strokeWidth={2}
               dot={false}

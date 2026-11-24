@@ -1,4 +1,4 @@
-import { formatCurrency } from '../lib/format'
+import { formatCurrency, personAge } from '../lib/format'
 import { effectiveAccessAge, findPerson, potOwner } from '../lib/projection'
 import type { Assumptions, YearRow } from '../lib/types'
 
@@ -62,7 +62,7 @@ export function WealthTooltip({
       <p className="mb-0.5 font-semibold text-slate-800 dark:text-slate-100">{year}</p>
       {row && (
         <p className="mb-2 text-[11px] text-slate-400">
-          {row.people.map((p) => `${p.name} ${p.age}`).join(' · ')}
+          {row.people.map((p) => personAge(p.name, p.age, row.people.length)).join(' · ')}
         </p>
       )}
       <table className="w-full">
