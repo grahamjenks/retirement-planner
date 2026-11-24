@@ -6,6 +6,7 @@ import type {
   DrawdownStrategy,
   OneOffEvent,
   PensionType,
+  PotKind,
   ContributionStep,
   Person,
   Property,
@@ -179,6 +180,7 @@ export interface PotPreset {
 const basePot = {
   kind: 'savings' as const,
   balance: 0,
+  costBasis: 0,
   contributionSchedule: [] as ContributionStep[],
   annualContribution: 0,
   accessibleFromAge: 0,
@@ -245,8 +247,13 @@ export const potPresets: PotPreset[] = [
   },
   {
     label: 'General investment account',
-    description: 'Taxable investments, accessible any time.',
-    defaults: { ...basePot, name: 'General investment account', growthRate: 5 },
+    description: 'Investments outside a wrapper. Gains are taxed when you sell.',
+    defaults: {
+      ...basePot,
+      kind: 'taxable' as const,
+      name: 'General investment account',
+      growthRate: 5,
+    },
   },
   {
     label: 'Cash savings',
@@ -357,14 +364,44 @@ function legacySchemeFrom(raw: unknown): DbScheme[] {
   ]
 }
 
+/** The name the GIA preset has always created pots under. */
+const GIA_PRESET_NAME = 'General investment account'
+
+/**
+ * A general investment account used to be stored as an ordinary savings pot,
+ * because the preset was identical to the Stocks & Shares ISA one — so plans
+ * saved before this hold a GIA that is modelled as tax-free.
+ *
+ * Those are moved across on load. Nothing about the projection changes when
+ * they are: the base cost defaults to the balance, so the pot carries no gain
+ * and owes no tax until someone says what they actually paid. What they get
+ * is the field to say it in.
+ */
+function coercePotKind(p: Partial<SavingsPot>): PotKind {
+  if (p.kind === 'pension' || p.kind === 'taxable') return p.kind
+  if (typeof p.name === 'string' && p.name.trim() === GIA_PRESET_NAME) return 'taxable'
+  return 'savings'
+}
+
 function coercePot(raw: unknown, index: number, ownerFallback: string): SavingsPot {
   const p = (raw ?? {}) as Partial<SavingsPot>
   const base = potPresets[0].defaults
+  const kind = coercePotKind(p)
+  const balance = num(p.balance, base.balance)
+  /*
+   * A pot that was not taxable when it was saved has no base cost worth
+   * reading — either the field is absent entirely, or it holds the 0 that
+   * every non-taxable pot carries. Either way the balance is the only honest
+   * answer: it assumes no gain, so promoting a pot changes no projection
+   * until someone says what they actually paid.
+   */
+  const costBasis = p.kind === 'taxable' ? num(p.costBasis, balance) : balance
   return {
     id: typeof p.id === 'string' && p.id ? p.id : `pot-${index}-${newId()}`,
     name: name(p.name, `Pot ${index + 1}`),
-    kind: p.kind === 'pension' ? 'pension' : 'savings',
-    balance: num(p.balance, base.balance),
+    kind,
+    balance,
+    costBasis,
     annualContribution: num(p.annualContribution, base.annualContribution),
     growthRate: rate(p.growthRate, base.growthRate),
     accessibleFromAge: age(p.accessibleFromAge, base.accessibleFromAge),
@@ -498,6 +535,9 @@ function coerceTax(raw: unknown): TaxSettings {
     additionalRatePct: num(t.additionalRatePct, defaultTaxSettings.additionalRatePct),
     taperThreshold: num(t.taperThreshold, defaultTaxSettings.taperThreshold),
     pensionTaxFreePct: num(t.pensionTaxFreePct, defaultTaxSettings.pensionTaxFreePct),
+    cgtAnnualExempt: num(t.cgtAnnualExempt, defaultTaxSettings.cgtAnnualExempt),
+    cgtBasicRatePct: num(t.cgtBasicRatePct, defaultTaxSettings.cgtBasicRatePct),
+    cgtHigherRatePct: num(t.cgtHigherRatePct, defaultTaxSettings.cgtHigherRatePct),
     taxFreeLumpSumAllowance: num(
       t.taxFreeLumpSumAllowance,
       defaultTaxSettings.taxFreeLumpSumAllowance,

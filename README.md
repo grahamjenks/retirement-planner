@@ -49,6 +49,12 @@ All three run in CI on every push and pull request.
   rate, access age and contribution end age. A Lifetime ISA is locked until 60,
   takes a 25% bonus on the first £4,000/yr, and closes to contributions at 50.
   Age rules follow whichever person owns the pot.
+- **A pot is taxed according to what it is.** An ISA or cash pot pays nothing
+  on the way out. A SIPP or other pension is taxed as income when drawn, with
+  the usual tax-free quarter. A general investment account is outside any
+  wrapper, so selling realises a capital gain — say what the holdings cost and
+  the plan works out the tax. Leave that figure alone and it tracks the
+  balance, which assumes no gain rather than taxing a guess.
 - **Spending is shared**, switching from working-age living costs to retirement
   spending once everyone has retired, with optional step-changes at set ages.
 - **One-off events** are lump sums that happen in a single year — an inheritance
@@ -71,9 +77,18 @@ All three run in CI on every push and pull request.
 ## Tax
 
 Income tax is applied to pension income — the state pension, salary-based
-pensions, and the taxable share of DC drawdown. ISA and savings withdrawals are
-returns of capital and are not taxed. Rates and bands are editable under
-**Income tax**, and the whole thing can be switched off.
+pensions, and the taxable share of DC drawdown. ISA and cash savings
+withdrawals are returns of capital and are not taxed.
+
+Capital gains tax is applied to general investment accounts. Each sale carries
+the pot's average cost, so the gain is the pot's unrealised gain scaled by the
+share being sold; gains above the £3,000 annual exempt amount are charged at
+18% on whatever basic-rate band the owner's income leaves free and 24% above
+it. Because the charge is worked out year by year, spreading a sale across
+several years to use more than one exempt amount shows up as the saving it is.
+
+Rates and bands are editable under **Income tax**, and the whole thing can be
+switched off.
 
 Salaries are held as take-home pay. If you haven't entered your own figure,
 it's estimated from gross by taking off pension contributions first, then
@@ -85,6 +100,11 @@ number from your payslip to override it.
 Tax relief and the annual allowance on money paid into a pension: a one-off
 payment lands at face value, so enter the gross figure if you want relief
 counted, and check the £60,000 allowance yourself.
+
+Dividend and interest tax inside a general investment account: only the gain
+on a sale is charged, not the income the holdings throw off along the way.
+Capital losses are not carried against gains either — a pot worth less than it
+cost simply realises nothing.
 
 Survivor benefits, and any change in spending after a first death. Life
 expectancy differs per person, but spending continues at the full rate for the

@@ -1,4 +1,12 @@
-import { estimateTakeHome, grossUpPension, marginalTax, taxFreePart } from './tax'
+import {
+  capitalGainsTax,
+  estimateTakeHome,
+  gainOnDisposal,
+  grossUpPension,
+  grossUpTaxable,
+  marginalTax,
+  taxFreePart,
+} from './tax'
 import type { TakeHomeEstimate, TaxSettings } from './tax'
 import { pensionSourceId, personIdFromSource } from './types'
 import type {
@@ -279,6 +287,12 @@ export function simulate(
   const propertiesSold = new Set<string>()
 
   let balances = a.pots.map((p) => Math.max(0, p.balance))
+  /*
+   * Base cost of each taxable pot, carried year to year beside its balance
+   * so a sale knows how much of what it takes is gain. Every other kind of
+   * pot holds a standing 0: there is no gain to measure in an ISA.
+   */
+  let bases = a.pots.map((p) => (p.kind === 'taxable' ? Math.max(0, p.costBasis) : 0))
   const pensionPots = new Map(
     a.people.map((p) => [p.id, p.pensionType === 'dc' ? Math.max(0, p.currentPensionPot) : 0]),
   )
@@ -387,7 +401,10 @@ export function simulate(
             if (!lumpSumPaid.has(key) && scheme.lumpSum > 0) {
               lumpSumPaid.add(key)
               const target = balances.findIndex((_b, i) => potOwnerAges[i] >= accessAges[i])
-              if (target >= 0) balances[target] += scheme.lumpSum
+              if (target >= 0) {
+                balances[target] += scheme.lumpSum
+                if (a.pots[target].kind === 'taxable') bases[target] += scheme.lumpSum
+              }
             }
           }
           dbIncome += income
@@ -427,12 +444,46 @@ export function simulate(
     // A pot can lose value in a bad year, but never goes negative from returns.
     const potInterest = balances.map((b, i) => b * Math.max(-1, potGrowth[i] + shock))
     balances = balances.map((b, i) => b + potInterest[i] + potContributions[i])
+    // Money paid in has already been paid for, so it adds to the base cost.
+    // Growth does not — the gap it opens up is exactly the unrealised gain.
+    bases = bases.map((c, i) => (a.pots[i].kind === 'taxable' ? c + potContributions[i] : c))
 
     // One-off lump sums land after growth, so a windfall doesn't earn a full
     // year's return in the year it arrives — the same treatment contributions
     // get. Money in is spendable straight away, subject to the pot's own
     // access rules; money out can never take a pot below zero.
     const potOneOffs = new Array<number>(balances.length).fill(0)
+
+    // Gains realised this year, per person. CGT has an annual exempt amount
+    // and bands that fill up, so every disposal has to know what came before
+    // it rather than being charged in isolation.
+    const realisedGains = new Map<string, number>()
+
+    /**
+     * Takes `gross` out of a pot, and for a taxable one works out the gain
+     * that realises. Base cost falls by the same share of itself that the
+     * balance falls by — the pooling rule, where every unit sold carries the
+     * pot's average cost rather than the cost of any particular purchase.
+     *
+     * The gain is recorded rather than charged, because what it costs depends
+     * on the owner's income for the year, which is not known at every call
+     * site. `chargeGains` settles up once it is.
+     */
+    const disposeFrom = (i: number, gross: number): number => {
+      const take = Math.min(gross, balances[i])
+      if (take <= 0) return 0
+      const pot = a.pots[i]
+      if (pot.kind !== 'taxable') {
+        balances[i] -= take
+        return 0
+      }
+      const gain = gainOnDisposal(take, balances[i], bases[i])
+      bases[i] -= bases[i] * (take / balances[i])
+      balances[i] -= take
+      const ownerId = potOwner(a, pot).id
+      realisedGains.set(ownerId, (realisedGains.get(ownerId) ?? 0) + gain)
+      return gain
+    }
 
     /**
      * Moves money into or out of a named destination — a savings pot, or a
@@ -456,9 +507,16 @@ export function simulate(
       }
       const i = potIndexById.get(targetId)
       if (i === undefined) return
-      const applied = amount < 0 ? -Math.min(balances[i], -amount) : amount
-      potOneOffs[i] += applied
-      balances[i] += applied
+      if (amount < 0) {
+        // Taking money out is a disposal like any other, gain and all.
+        const taken = Math.min(balances[i], -amount)
+        disposeFrom(i, taken)
+        potOneOffs[i] -= taken
+        return
+      }
+      potOneOffs[i] += amount
+      balances[i] += amount
+      if (a.pots[i].kind === 'taxable') bases[i] += amount
     }
 
     for (const event of a.oneOffEvents) {
@@ -523,6 +581,34 @@ export function simulate(
       taxTotal += tax
     }
 
+    let cgtTotal = 0
+    const cgtCharged = new Map<string, number>()
+    /**
+     * Brings a person's capital gains bill up to date with the gains they
+     * have realised so far this year, and returns what doing so cost.
+     *
+     * Charging the difference, rather than each gain on its own, keeps the
+     * exempt amount and the basic-rate band split right however many
+     * disposals a year ends up holding.
+     */
+    const chargeGains = (personId: string): number => {
+      const due = capitalGainsTax(
+        realisedGains.get(personId) ?? 0,
+        taxBase.get(personId) ?? 0,
+        a.tax,
+      )
+      const extra = due - (cgtCharged.get(personId) ?? 0)
+      if (extra === 0) return 0
+      cgtCharged.set(personId, due)
+      personTax.set(personId, (personTax.get(personId) ?? 0) + extra)
+      taxTotal += extra
+      cgtTotal += extra
+      return extra
+    }
+    // One-off withdrawals land before income is known, so whatever they
+    // realised is charged now that it is.
+    for (const person of a.people) chargeGains(person.id)
+
     // What the household can actually spend before touching any pot.
     const netGuaranteed = guaranteedIncome - taxTotal
     const netNeed = outgoings - netGuaranteed
@@ -577,13 +663,30 @@ export function simulate(
       const pot = a.pots[i]
 
       if (pot.kind !== 'pension') {
-        const take = Math.min(balances[i], want)
-        if (take <= 0) return 0
-        balances[i] -= take
-        potTaken[i] += take
-        withdrawal += take
-        netDelivered += take
-        return take
+        const ownerId = potOwner(a, pot).id
+        // An unwrapped pot has to sell more than is wanted, because the gain
+        // on what it sells is taxed. An ISA sells exactly what is wanted.
+        const gross =
+          pot.kind === 'taxable'
+            ? Math.min(
+                balances[i],
+                grossUpTaxable(
+                  want,
+                  balances[i],
+                  bases[i],
+                  realisedGains.get(ownerId) ?? 0,
+                  taxBase.get(ownerId) ?? 0,
+                  a.tax,
+                ),
+              )
+            : Math.min(balances[i], want)
+        if (gross <= 0) return 0
+        disposeFrom(i, gross)
+        potTaken[i] += gross
+        withdrawal += gross
+        const net = gross - chargeGains(ownerId)
+        netDelivered += net
+        return net
       }
 
       const ownerId = potOwner(a, pot).id
@@ -688,6 +791,7 @@ export function simulate(
     }
 
     balances = balances.map((b) => Math.max(0, b))
+    bases = bases.map((c) => Math.max(0, c))
 
     // A pot that funds its own contribution is churn, not activity: paying
     // £30k in and taking £28k straight back out to afford it is really a £2k
@@ -755,6 +859,8 @@ export function simulate(
       dbIncomeTotal,
       guaranteedIncome,
       taxPaid: taxTotal,
+      capitalGainsTax: cgtTotal,
+      realisedGains: [...realisedGains.values()].reduce((s, g) => s + g, 0),
       netIncome: guaranteedIncome + reportedWithdrawal - taxTotal,
       mortgagePayment,
       mortgageActive,
