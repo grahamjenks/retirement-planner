@@ -10,6 +10,24 @@ npm install
 npm run dev
 ```
 
+## Checks
+
+```bash
+npm test          # the projection engine, tax, storage and the optimiser
+npm run build     # type-checks with `tsc -b`, then builds
+npm run lint
+```
+
+`npm test` covers `src/lib` — the parts that decide what the numbers say. The
+figures in those tests are worked out by hand in the comments rather than
+captured from a previous run, so a change that shifts them has to argue with
+the arithmetic rather than just re-record it.
+
+Note that a bare `tsc --noEmit` reports nothing here: the root `tsconfig.json`
+is `files: []` plus project references, so `tsc -b` is the real type check.
+
+All three run in CI on every push and pull request.
+
 ## How it works
 
 - Everything is modelled in **today's money** (real terms): pots grow at their
